@@ -2,7 +2,7 @@
 # ------------------------------------------------
 # Register SNO on RHACM
 # ------------------------------------------------
-ocp4_workload_register_sno_cluster_name: aws_sno
+ocp4_workload_register_sno_cluster_name: aws-sno
 
 ocp4_workload_register_sno_rhacm_openshift_api_url: ""
 ocp4_workload_register_sno_rhacm_openshift_api_token: ""

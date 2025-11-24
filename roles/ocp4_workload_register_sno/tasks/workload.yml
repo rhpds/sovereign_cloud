@@ -37,7 +37,7 @@
     api_key: "{{ ocp4_workload_register_sno_aws_openshift_api_token }}"
     validate_certs: false
     state: present
-    definition: "{{ ocp4_workload_register_sno_import_manifest }}"
+    definition: "{{ _ocp4_workload_register_sno_import_manifest }}"
   register: r_import_result
   retries: 5
   delay: 60
