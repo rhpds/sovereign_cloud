@@ -44,3 +44,17 @@
     state: present
     definition: "{{ _ocp4_workload_register_sno_import_manifest }}"
     apply: true
+
+- name: Pass through user information about the AWS cluster
+  agnosticd.core.agnosticd_user_info:
+    data:
+      aws_region: "{{ aws_sno_provision_data.aws_region }}"
+      aws_bastion_public_hostname: "{{ aws_sno_provision_data.bastion_public_hostname }}"
+      aws_bastion_ssh_password: "{{ aws_sno_provision_data.bastion_ssh_password }}"
+      aws_bastion_ssh_user_name: "{{ aws_sno_provision_data.bastion_ssh_user_name }}"
+      aws_openshift_api_ca_cert: "{{ aws_sno_provision_data.openshift_api_ca_cert }}"
+      aws_openshift_api_url: "{{ aws_sno_provision_data.openshift_api_url }}"
+      aws_openshift_cluster_admin_token: "{{ aws_sno_provision_data.openshift_cluster_admin_token }}"
+      aws_openshift_cluster_ingress_domain: "{{ aws_sno_provision_data.openshift_cluster_ingress_domain }}"
+      aws_openshift_console_url: "{{ aws_sno_provision_data.openshift_console_url }}"
+  
