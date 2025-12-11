@@ -1,0 +1,11 @@
+---
+# ------------------------------------------------
+# Register SNO on RHACM
+# ------------------------------------------------
+ocp4_workload_prepare_hcp_secret_name: hcp
+ocp4_workload_prepare_hcp_secret_namespace: hcp
+
+# Pull secret needs to come from variables
+ocp4_workload_prepare_hcp_pull_secret: ""
+# Public key can be empty
+ocp4_workload_prepare_hcp_ssh_public_key: ""
