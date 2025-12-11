@@ -1,0 +1,3 @@
+= ocp4_workload_register_sno - Register a SNO cluster on RHACM
+
+See defaults/main.yml for variables to set.

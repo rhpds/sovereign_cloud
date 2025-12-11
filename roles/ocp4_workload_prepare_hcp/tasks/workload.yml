@@ -1,0 +1,21 @@
+---
+
+- name: Assert pull secret is set and non-empty
+  ansible.builtin.assert:
+    that: ocp4_workload_prepare_hcp_pull_secret | default("") | length > 0
+    fail_msg: "ocp4_workload_prepare_hcp_pull_secret must be set to a non-empty value"
+    success_msg: "Pull secret is set"
+
+- name: Create secret on RHACM
+  kubernetes.core.k8s:
+    state: present
+    template: "{{ item }}"
+  loop:
+  - namespace.yaml.j2
+  - secret.yaml.j2
+
+- name: Save user information
+  agnosticd.core.agnosticd_user_info:
+    data:
+      hcp_secret: "{{ ocp4_workload_prepare_hcp_secret_name }}"
+      hcp_secret_namespace: "{{ ocp4_workload_prepare_hcp_secret_namespace }}"

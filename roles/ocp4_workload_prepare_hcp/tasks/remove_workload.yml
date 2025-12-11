@@ -1,0 +1,8 @@
+---
+- name: Remove secret from RHACM
+  kubernetes.core.k8s:
+    state: absent
+    template: "{{ item }}"
+  loop:
+  - secret.yaml.j2
+  - namespace.yaml.j2
