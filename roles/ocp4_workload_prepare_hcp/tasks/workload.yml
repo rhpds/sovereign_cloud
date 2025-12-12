@@ -1,24 +1,33 @@
 ---
-
-- name: Assert pull secret is set and non-empty
-  ansible.builtin.assert:
-    that: ocp4_workload_prepare_hcp_pull_secret | default("") | length > 0
-    fail_msg: "ocp4_workload_prepare_hcp_pull_secret must be set to a non-empty value"
-    success_msg: "Pull secret is set"
-
-- name: Create secret on RHACM
+- name: Create namespace
   kubernetes.core.k8s:
     state: present
-    template: "{{ item }}"
-  loop:
-  - namespace.yaml.j2
+    api_ersion: v1
+    kind: Namespace
+    name: "{{ ocp4_workload_prepare_hcp_secret_namespace }}"
 
-- name: Create secret on RHACM
+- name: Retrieve pull-secret from openshift-config namespace
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: pull-secret
+    namespace: openshift-config
+  register: r_pull_secret
+
+- name: Create secret on RHACM (copy of pull-secret)
   kubernetes.core.k8s:
     state: present
-    template: "{{ item }}"
-  loop:
-  - secret.yaml.j2
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "{{ ocp4_workload_prepare_hcp_secret_name }}"
+        namespace: "{{ ocp4_workload_prepare_hcp_secret_namespace }}"
+        labels:
+          cluster.open-cluster-management.io/credentials: ""
+          cluster.open-cluster-management.io/type: kubevirt
+      type: "{{ r_pull_secret.resources[0].type }}"
+      data: "{{ r_pull_secret.resources[0].data }}"
 
 - name: Save user information
   agnosticd.core.agnosticd_user_info:
