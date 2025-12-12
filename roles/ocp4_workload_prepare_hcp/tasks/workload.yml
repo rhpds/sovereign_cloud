@@ -14,6 +14,10 @@
     namespace: openshift-config
   register: r_pull_secret
 
+- name: Extract .dockerconfigjson from pull-secret
+  ansible.builtin.set_fact:
+    pull_secret_json: "{{ r_pull_secret.resources[0].data['.dockerconfigjson'] | b64decode }}"
+
 - name: Create secret on RHACM (copy of pull-secret)
   kubernetes.core.k8s:
     state: present
@@ -26,8 +30,9 @@
         labels:
           cluster.open-cluster-management.io/credentials: ""
           cluster.open-cluster-management.io/type: kubevirt
-      type: "{{ r_pull_secret.resources[0].type }}"
-      data: "{{ r_pull_secret.resources[0].data }}"
+      type: Opaque
+      stringData:
+        pullSecret: "{{ pull_secret_json }}"
 
 - name: Save user information
   agnosticd.core.agnosticd_user_info:
