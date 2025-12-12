@@ -12,6 +12,12 @@
     template: "{{ item }}"
   loop:
   - namespace.yaml.j2
+
+- name: Create secret on RHACM
+  kubernetes.core.k8s:
+    state: present
+    template: "{{ item }}"
+  loop:
   - secret.yaml.j2
 
 - name: Save user information
