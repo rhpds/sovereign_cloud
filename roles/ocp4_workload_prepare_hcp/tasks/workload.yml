@@ -31,8 +31,8 @@
           cluster.open-cluster-management.io/credentials: ""
           cluster.open-cluster-management.io/type: kubevirt
       type: Opaque
-      data:
-        pullSecret: "{{ pull_secret_json | b64encode }}"
+      stringData:
+        pullSecret: "{{ pull_secret_json }}"
   retries: 10
   delay: 10
 
