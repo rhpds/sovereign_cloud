@@ -66,4 +66,7 @@
       aws_openshift_cluster_ingress_domain: "{{ aws_sno_provision_data.openshift_cluster_ingress_domain }}"
       aws_openshift_console_url: "{{ aws_sno_provision_data.openshift_console_url }}"
       aws_openshift_kubeadmin_password: "{{ aws_sno_provision_data.openshift_kubeadmin_password }}"
-  
+      cnv_bastion_public_hostname: "{{ bastion_ansible_host }}"
+      cnv_bastion_ssh_password: "{{ bastion_ansible_ssh_pass }}"
+      cnv_bastion_ssh_user_name: "{{ bastion_ansible_user }}"
+      cnv_bastion_ssh_port: "{{ bastion_ansible_port }}"
