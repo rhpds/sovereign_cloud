@@ -45,6 +45,14 @@
     definition: "{{ _ocp4_workload_register_sno_import_manifest }}"
     apply: true
 
+- name: Enable policy addons for managed cluster
+  kubernetes.core.k8s:
+    host: "{{ ocp4_workload_register_sno_rhacm_openshift_api_url }}"
+    api_key: "{{ ocp4_workload_register_sno_rhacm_openshift_api_token }}"
+    validate_certs: false
+    state: present
+    template: managedclusteraddons-policy.yaml.j2
+
 - name: Pass through user information about the AWS cluster
   agnosticd.core.agnosticd_user_info:
     data:
