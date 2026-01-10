@@ -65,4 +65,5 @@
       aws_openshift_cluster_admin_token: "{{ aws_sno_provision_data.openshift_cluster_admin_token }}"
       aws_openshift_cluster_ingress_domain: "{{ aws_sno_provision_data.openshift_cluster_ingress_domain }}"
       aws_openshift_console_url: "{{ aws_sno_provision_data.openshift_console_url }}"
+      aws_openshift_kubeadmin_password: "{{ aws_sno_provision_data.openshift_kubeadmin_password }}"
   
