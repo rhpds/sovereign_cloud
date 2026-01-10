@@ -36,6 +36,23 @@
   retries: 10
   delay: 10
 
+- name: Create policies namespace
+  kubernetes.core.k8s:
+    state: present
+    api_version: v1
+    kind: Namespace
+    name: "{{ ocp4_workload_prepare_hcp_policy_namespace }}"
+
+- name: Create ManagedClusterSet and policy
+  kubernetes.core.k8s:
+    state: present
+    template: "{{ item }}"
+  loop:
+  - managedclusterset.yaml.j2
+  - managedclustersetbinding.yaml.j2
+  - placement.yaml.j2
+  - policy_gitops.yaml.j2
+
 - name: Save user information
   agnosticd.core.agnosticd_user_info:
     data:

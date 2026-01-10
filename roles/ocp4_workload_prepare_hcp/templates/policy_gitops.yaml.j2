@@ -1,0 +1,78 @@
+---
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: policy-gitops-operator
+  namespace: {{ ocp4_workload_prepare_hcp_policy_namespace }}
+spec:
+  disabled: false
+  remediationAction: enforce
+  policy-templates:
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: gitops-operator-namespace
+        spec:
+          remediationAction: enforce
+          severity: high
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: Namespace
+                metadata:
+                  name: openshift-gitops-operator
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: gitops-operator-operatorgroup
+        spec:
+          remediationAction: enforce
+          severity: high
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: operators.coreos.com/v1
+                kind: OperatorGroup
+                metadata:
+                  name: openshift-gitops-operator
+                  namespace: openshift-gitops-operator
+                spec: {}
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: gitops-operator-subscription
+        spec:
+          remediationAction: enforce
+          severity: high
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: operators.coreos.com/v1alpha1
+                kind: Subscription
+                metadata:
+                  name: {{ ocp4_workload_prepare_hcp_gitops_operator_name }}
+                  namespace: openshift-gitops-operator
+                spec:
+                  channel: {{ ocp4_workload_prepare_hcp_gitops_operator_channel }}
+                  installPlanApproval: {{ ocp4_workload_prepare_hcp_gitops_operator_approval }}
+                  name: {{ ocp4_workload_prepare_hcp_gitops_operator_name }}
+                  source: {{ ocp4_workload_prepare_hcp_gitops_operator_source }}
+                  sourceNamespace: {{ ocp4_workload_prepare_hcp_gitops_operator_source_namespace }}
+---
+apiVersion: policy.open-cluster-management.io/v1
+kind: PlacementBinding
+metadata:
+  name: binding-policy-gitops
+  namespace: {{ ocp4_workload_prepare_hcp_policy_namespace }}
+placementRef:
+  apiGroup: cluster.open-cluster-management.io
+  kind: Placement
+  name: gitops-placement
+subjects:
+  - apiGroup: policy.open-cluster-management.io
+    kind: Policy
+    name: policy-gitops-operator

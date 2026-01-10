@@ -9,3 +9,21 @@ ocp4_workload_prepare_hcp_secret_namespace: hcp
 ocp4_workload_prepare_hcp_pull_secret: ""
 # Public key can be empty
 ocp4_workload_prepare_hcp_ssh_public_key: ""
+
+# ------------------------------------------------
+# RHACM Policy Configuration for GitOps Operator
+# ------------------------------------------------
+ocp4_workload_prepare_hcp_policy_namespace: policies
+ocp4_workload_prepare_hcp_clusterset_name: managed
+
+# GitOps Operator Configuration
+ocp4_workload_prepare_hcp_gitops_operator_name: openshift-gitops-operator
+ocp4_workload_prepare_hcp_gitops_operator_channel: gitops-1.19
+ocp4_workload_prepare_hcp_gitops_operator_source: redhat-operators
+ocp4_workload_prepare_hcp_gitops_operator_source_namespace: openshift-marketplace
+ocp4_workload_prepare_hcp_gitops_operator_approval: Automatic
+
+# Cloud labels to target with Placement
+ocp4_workload_prepare_hcp_placement_cloud_labels:
+  - Amazon
+  - BareMetal
