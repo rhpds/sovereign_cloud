@@ -36,6 +36,9 @@
   retries: 10
   delay: 10
 
+- name: Set up RHACM policies for GitOps operator deployment
+  ansible.builtin.include_tasks: policy_gitops.yml
+
 - name: Save user information
   agnosticd.core.agnosticd_user_info:
     data:

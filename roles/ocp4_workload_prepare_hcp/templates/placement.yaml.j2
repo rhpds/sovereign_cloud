@@ -1,0 +1,16 @@
+---
+apiVersion: cluster.open-cluster-management.io/v1beta1
+kind: Placement
+metadata:
+  name: gitops-placement
+  namespace: {{ ocp4_workload_prepare_hcp_policy_namespace }}
+spec:
+  clusterSets:
+    - {{ ocp4_workload_prepare_hcp_clusterset_name }}
+  predicates:
+{% for cloud_label in ocp4_workload_prepare_hcp_placement_cloud_labels %}
+    - requiredClusterSelector:
+        labelSelector:
+          matchLabels:
+            cloud: {{ cloud_label }}
+{% endfor %}
