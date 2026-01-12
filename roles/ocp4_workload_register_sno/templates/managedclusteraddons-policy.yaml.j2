@@ -2,6 +2,22 @@
 apiVersion: addon.open-cluster-management.io/v1alpha1
 kind: ManagedClusterAddOn
 metadata:
+  name: application-manager
+  namespace: {{ ocp4_workload_register_sno_cluster_name }}
+spec:
+  installNamespace: open-cluster-management-agent-addon
+---
+apiVersion: addon.open-cluster-management.io/v1alpha1
+kind: ManagedClusterAddOn
+metadata:
+  name: cert-policy-controller
+  namespace: {{ ocp4_workload_register_sno_cluster_name }}
+spec:
+  installNamespace: open-cluster-management-agent-addon
+---
+apiVersion: addon.open-cluster-management.io/v1alpha1
+kind: ManagedClusterAddOn
+metadata:
   name: governance-policy-framework
   namespace: {{ ocp4_workload_register_sno_cluster_name }}
 spec:
@@ -11,6 +27,14 @@ apiVersion: addon.open-cluster-management.io/v1alpha1
 kind: ManagedClusterAddOn
 metadata:
   name: config-policy-controller
+  namespace: {{ ocp4_workload_register_sno_cluster_name }}
+spec:
+  installNamespace: open-cluster-management-agent-addon
+---
+apiVersion: addon.open-cluster-management.io/v1alpha1
+kind: ManagedClusterAddOn
+metadata:
+  name: search-collector
   namespace: {{ ocp4_workload_register_sno_cluster_name }}
 spec:
   installNamespace: open-cluster-management-agent-addon
