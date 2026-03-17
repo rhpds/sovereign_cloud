@@ -19,10 +19,10 @@ spec:
         object-templates:
         - complianceType: musthave
           objectDefinition:
-          apiVersion: v1
-          kind: Namespace
-          metadata:
-            name: openshift-compliance
+            apiVersion: v1
+            kind: Namespace
+            metadata:
+              name: openshift-compliance
   - objectDefinition:
       apiVersion: policy.open-cluster-management.io/v1
       kind: ConfigurationPolicy
@@ -34,12 +34,12 @@ spec:
         object-templates:
         - complianceType: musthave
           objectDefinition:
-          apiVersion: operators.coreos.com/v1
-          kind: OperatorGroup
-          metadata:
-            name: openshift-compliance-operator
-            namespace: openshift-compliance
-          spec: {}
+            apiVersion: operators.coreos.com/v1
+            kind: OperatorGroup
+            metadata:
+              name: openshift-compliance-operator
+              namespace: openshift-compliance
+            spec: {}
   - objectDefinition:
       apiVersion: policy.open-cluster-management.io/v1
       kind: ConfigurationPolicy
@@ -51,17 +51,17 @@ spec:
         object-templates:
         - complianceType: musthave
           objectDefinition:
-          apiVersion: operators.coreos.com/v1alpha1
-          kind: Subscription
-          metadata:
-            name: compliance-operator
-            namespace: openshift-compliance
-          spec:
-            channel: {{ ocp4_workload_prepare_hcp_compliance_operator_channel }}
-            installPlanApproval: {{ ocp4_workload_prepare_hcp_compliance_operator_approval }}
-            name: compliance-operator
-            source: {{ ocp4_workload_prepare_hcp_compliance_operator_source }}
-            sourceNamespace: {{ ocp4_workload_prepare_hcp_compliance_operator_source_namespace }}
+            apiVersion: operators.coreos.com/v1alpha1
+            kind: Subscription
+            metadata:
+              name: openshift-compliance
+              namespace: openshift-compliance
+            spec:
+              channel: {{ ocp4_workload_prepare_hcp_compliance_operator_channel }}
+              installPlanApproval: {{ ocp4_workload_prepare_hcp_compliance_operator_approval }}
+              name: compliance-operator
+              source: {{ ocp4_workload_prepare_hcp_compliance_operator_source }}
+              sourceNamespace: {{ ocp4_workload_prepare_hcp_compliance_operator_source_namespace }}
 ---
 apiVersion: policy.open-cluster-management.io/v1
 kind: PlacementBinding
