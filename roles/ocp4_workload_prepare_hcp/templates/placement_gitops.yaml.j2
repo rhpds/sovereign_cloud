@@ -1,47 +1,25 @@
 ---
-apiVersion: policy.open-cluster-management.io/v1
-kind: Policy
+apiVersion: cluster.open-cluster-management.io/v1beta1
+kind: Placement
 metadata:
-  name: policy-gitops-operator
+  name: gitops-operator-placement
   namespace: {{ ocp4_workload_prepare_hcp_gitops_operator_policy_namespace }}
 spec:
-  disabled: false
-  policy-templates:
-  - objectDefinition:
-      apiVersion: policy.open-cluster-management.io/v1
-      kind: ConfigurationPolicy
-      metadata:
-        name: gitops-operator-namespace
-      spec:
-        object-templates:
-        - complianceType: musthave
-          objectDefinition:
-            apiVersion: v1
-            kind: Namespace
-            metadata:
-              name: openshift-gitops-operator
-        pruneObjectBehavior: DeleteIfCreated
-        remediationAction: enforce
-        severity: high
-  - objectDefinition:
-      apiVersion: policy.open-cluster-management.io/v1beta1
-      kind: OperatorPolicy
-      metadata:
-        name: operatorpolicy-gitops-operator
-      spec:
-        complianceType: musthave
-        operatorGroup:
-          name: openshift-gitops-operator
-          namespace: openshift-gitops-operator
-          targetNamespaces:
-          - openshift-gitops-operator
-        remediationAction: enforce
-        severity: high
-        subscription:
-          channel: {{ ocp4_workload_prepare_hcp_gitops_operator_channel }}
-          name: openshift-gitops-operator
-          namespace: openshift-gitops-operator
-          source: {{ ocp4_workload_prepare_hcp_gitops_operator_source }}
-          sourceNamespace: {{ ocp4_workload_prepare_hcp_gitops_operator_source_namespace }}
-        upgradeApproval: Automatic
-  remediationAction: enforce
+  clusterSets:
+{% for clusterset in ocp4_workload_prepare_hcp_gitops_operator_clustersets %}
+  - {{ clusterset }}
+{% endfor %}
+  tolerations:
+  - key: cluster.open-cluster-management.io/unreachable
+    operator: Exists
+  - key: cluster.open-cluster-management.io/unavailable
+    operator: Exists
+  predicates:
+{% for label in ocp4_workload_prepare_hcp_gitops_operator_placement_labels %}
+  - requiredClusterSelector:
+      labelSelector:
+        matchLabels:
+{% for key, value in label.items() %}
+          {{ key }}: {{ value }}
+{% endfor %}
+{% endfor %}
