@@ -1,3 +1,4 @@
+---
 apiVersion: policy.open-cluster-management.io/v1
 kind: Policy
 metadata:
@@ -15,7 +16,7 @@ spec:
       apiVersion: policy.open-cluster-management.io/v1
       kind: ConfigurationPolicy
       metadata:
-        name: comp-operator-ns
+        name: compliance-operator-namespace
       spec:
         object-templates:
         - complianceType: musthave
@@ -31,7 +32,7 @@ spec:
       apiVersion: policy.open-cluster-management.io/v1beta1
       kind: OperatorPolicy
       metadata:
-        name: operatorpolicy-comp-operator
+        name: operatorpolicy-compliance-operator
       spec:
         complianceType: musthave
         operatorGroup:

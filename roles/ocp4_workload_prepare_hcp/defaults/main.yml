@@ -22,7 +22,6 @@ ocp4_workload_prepare_hcp_gitops_operator_policy_namespace: policies
 ocp4_workload_prepare_hcp_gitops_operator_channel: gitops-1.19
 ocp4_workload_prepare_hcp_gitops_operator_source: redhat-operators
 ocp4_workload_prepare_hcp_gitops_operator_source_namespace: openshift-marketplace
-ocp4_workload_prepare_hcp_gitops_operator_approval: Automatic
 # Clustersets to target with Placement
 ocp4_workload_prepare_hcp_gitops_operator_clustersets:
 - "{{ ocp4_workload_prepare_hcp_clusterset_name }}"
@@ -36,7 +35,6 @@ ocp4_workload_prepare_hcp_compliance_operator_policy_namespace: open-cluster-man
 ocp4_workload_prepare_hcp_compliance_operator_channel: stable
 ocp4_workload_prepare_hcp_compliance_operator_source: redhat-operators
 ocp4_workload_prepare_hcp_compliance_operator_source_namespace: openshift-marketplace
-ocp4_workload_prepare_hcp_compliance_operator_approval: Automatic
 
 # Clustersets to target with Placement
 ocp4_workload_prepare_hcp_compliance_operator_clustersets:
