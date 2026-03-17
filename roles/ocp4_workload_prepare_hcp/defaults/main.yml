@@ -40,11 +40,7 @@ ocp4_workload_prepare_hcp_compliance_operator_approval: Automatic
 
 # Clustersets to target with Placement
 ocp4_workload_prepare_hcp_compliance_operator_clustersets:
-- "{{ ocp4_workload_prepare_hcp_clusterset_name }}"
-- default
+- global
 
 # Labels to target with Placement
-ocp4_workload_prepare_hcp_compliance_operator_placement_labels:
-- cloud: Amazon
-- cloud: BareMetal
-- cloud: Other
+ocp4_workload_prepare_hcp_compliance_operator_placement_labels: []
