@@ -9,6 +9,11 @@ spec:
 {% for clusterset in ocp4_workload_prepare_hcp_gitops_operator_clustersets %}
   - {{ clusterset }}
 {% endfor %}
+  tolerations:
+  - key: cluster.open-cluster-management.io/unreachable
+    operator: Exists
+  - key: cluster.open-cluster-management.io/unavailable
+    operator: Exists
   predicates:
 {% for label in ocp4_workload_prepare_hcp_gitops_operator_placement_labels %}
   - requiredClusterSelector:
