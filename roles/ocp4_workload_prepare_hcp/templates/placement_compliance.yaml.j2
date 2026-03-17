@@ -14,3 +14,12 @@ spec:
     operator: Exists
   - key: cluster.open-cluster-management.io/unavailable
     operator: Exists
+  predicates:
+{% for label in ocp4_workload_prepare_hcp_compliance_operator_placement_labels %}
+  - requiredClusterSelector:
+      labelSelector:
+        matchLabels:
+{% for key, value in label.items() %}
+          {{ key }}: {{ value }}
+{% endfor %}
+{% endfor %}
