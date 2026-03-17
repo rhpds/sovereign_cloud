@@ -10,21 +10,27 @@
     name: binding-policy-gitops
     namespace: "{{ ocp4_workload_prepare_hcp_policy_namespace }}"
 
-- name: Remove Policy
+- name: Remove Policies
   kubernetes.core.k8s:
     state: absent
     api_version: policy.open-cluster-management.io/v1
     kind: Policy
-    name: policy-gitops-operator
+    name: "{{ item }}"
     namespace: "{{ ocp4_workload_prepare_hcp_policy_namespace }}"
+  loop:
+  - policy-gitops-operator
+  - policy-compliance-operator
 
 - name: Remove Placement
   kubernetes.core.k8s:
     state: absent
     api_version: cluster.open-cluster-management.io/v1beta1
     kind: Placement
-    name: gitops-placement
+    name: "{{ item }}"
     namespace: "{{ ocp4_workload_prepare_hcp_policy_namespace }}"
+  loop:
+  - gitops-placement
+  - compliance-placement
 
 - name: Remove ManagedClusterSetBinding
   kubernetes.core.k8s:

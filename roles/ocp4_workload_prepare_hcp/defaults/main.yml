@@ -17,13 +17,26 @@ ocp4_workload_prepare_hcp_policy_namespace: policies
 ocp4_workload_prepare_hcp_clusterset_name: managed
 
 # GitOps Operator Configuration
-ocp4_workload_prepare_hcp_gitops_operator_name: openshift-gitops-operator
 ocp4_workload_prepare_hcp_gitops_operator_channel: gitops-1.19
 ocp4_workload_prepare_hcp_gitops_operator_source: redhat-operators
 ocp4_workload_prepare_hcp_gitops_operator_source_namespace: openshift-marketplace
 ocp4_workload_prepare_hcp_gitops_operator_approval: Automatic
-
+# Clusterset to target with Placement
+ocp4_workload_prepare_hcp_gitops_operator_clusterset: "{{ ocp4_workload_prepare_hcp_clusterset_name }}"
 # Cloud labels to target with Placement
-ocp4_workload_prepare_hcp_placement_cloud_labels:
-  - Amazon
-  - BareMetal
+ocp4_workload_prepare_hcp_gitops_operator_placement_cloud_labels:
+- Amazon
+- BareMetal
+
+# Compliance Operator Configuration
+ocp4_workload_prepare_hcp_compliance_operator_channel: stable
+ocp4_workload_prepare_hcp_compliance_operator_source: redhat-operators
+ocp4_workload_prepare_hcp_compliance_operator_source_namespace: openshift-marketplace
+ocp4_workload_prepare_hcp_compliance_operator_approval: Automatic
+# Clusterset to target with Placement
+ocp4_workload_prepare_hcp_compliance_operator_clusterset: "{{ ocp4_workload_prepare_hcp_clusterset_name }}"
+# Cloud labels to target with Placement
+ocp4_workload_prepare_hcp_compliance_operator_placement_cloud_labels:
+- Amazon
+- BareMetal
+- Other

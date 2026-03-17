@@ -50,8 +50,10 @@
   loop:
   - managedclusterset.yaml.j2
   - managedclustersetbinding.yaml.j2
-  - placement.yaml.j2
+  - placement_gitops.yaml.j2
   - policy_gitops.yaml.j2
+  - placement_compliance.yaml.j2
+  - policy_compliance.yaml.j2
 
 - name: Save user information
   agnosticd.core.agnosticd_user_info:
