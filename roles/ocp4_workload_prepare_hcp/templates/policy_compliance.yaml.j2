@@ -18,11 +18,11 @@ spec:
         severity: high
         object-templates:
         - complianceType: musthave
-            objectDefinition:
-            apiVersion: v1
-            kind: Namespace
-            metadata:
-              name: openshift-compliance
+          objectDefinition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: openshift-compliance
   - objectDefinition:
       apiVersion: policy.open-cluster-management.io/v1
       kind: ConfigurationPolicy
@@ -33,13 +33,13 @@ spec:
         severity: high
         object-templates:
         - complianceType: musthave
-            objectDefinition:
-            apiVersion: operators.coreos.com/v1
-            kind: OperatorGroup
-            metadata:
-              name: openshift-compliance-operator
-              namespace: openshift-compliance
-            spec: {}
+          objectDefinition:
+          apiVersion: operators.coreos.com/v1
+          kind: OperatorGroup
+          metadata:
+            name: openshift-compliance-operator
+            namespace: openshift-compliance
+          spec: {}
   - objectDefinition:
       apiVersion: policy.open-cluster-management.io/v1
       kind: ConfigurationPolicy
