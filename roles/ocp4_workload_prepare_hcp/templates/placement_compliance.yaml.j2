@@ -3,7 +3,7 @@ apiVersion: cluster.open-cluster-management.io/v1beta1
 kind: Placement
 metadata:
   name: compliance-placement
-  namespace: {{ ocp4_workload_prepare_hcp_policy_namespace }}
+  namespace: {{ ocp4_workload_prepare_hcp_gitops_operator_policy_namespace }}
 spec:
   clusterSets:
 {% for clusterset in ocp4_workload_prepare_hcp_compliance_operator_clustersets %}
