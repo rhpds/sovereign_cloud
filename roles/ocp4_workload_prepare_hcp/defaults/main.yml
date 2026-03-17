@@ -30,7 +30,9 @@ ocp4_workload_prepare_hcp_gitops_operator_placement_labels:
 - cloud: Amazon
 - cloud: BareMetal
 
-# Compliance Operator Configuration
+# ------------------------------------------------
+# RHACM Policy Configuration for Compliance Operator
+# ------------------------------------------------
 ocp4_workload_prepare_hcp_compliance_operator_policy_namespace: open-cluster-management-global-set
 ocp4_workload_prepare_hcp_compliance_operator_channel: stable
 ocp4_workload_prepare_hcp_compliance_operator_source: redhat-operators
@@ -42,3 +44,8 @@ ocp4_workload_prepare_hcp_compliance_operator_clustersets:
 
 # Labels to target with Placement
 ocp4_workload_prepare_hcp_compliance_operator_placement_labels: []
+
+# ------------------------------------------------
+# ApplicationSet for Autoshift
+# ------------------------------------------------
+ocp4_workload_prepare_hcp_autoshift_version: "0.0.4"
