@@ -6,11 +6,15 @@ metadata:
   namespace: {{ ocp4_workload_prepare_hcp_policy_namespace }}
 spec:
   clusterSets:
-  - {{ ocp4_workload_prepare_hcp_compliance_operator_clusterset }}
+{% for clusterset in ocp4_workload_prepare_hcp_compliance_operator_clustersets %}
+  - {{ clusterset }}
+{% endfor %}
   predicates:
-{% for cloud_label in ocp4_workload_prepare_hcp_compliance_operator_placement_cloud_labels %}
+{% for label in ocp4_workload_prepare_hcp_compliance_operator_placement_labels %}
   - requiredClusterSelector:
       labelSelector:
         matchLabels:
-          cloud: {{ cloud_label }}
+{% for key, value in label.items() %}
+          {{ key }}: {{ value }}
+{% endfor %}
 {% endfor %}
