@@ -1,21 +1,22 @@
----
 apiVersion: policy.open-cluster-management.io/v1
 kind: Policy
 metadata:
-  name: policy-compliance-operator
+  annotations:
+    policy.open-cluster-management.io/categories: CA Security Assessment and Authorization
+    policy.open-cluster-management.io/controls: CA-2 Security Assessments, CA-7 Continuous
+      Monitoring
+    policy.open-cluster-management.io/standards: NIST SP 800-53
+  name: compliance-operator
   namespace: {{ ocp4_workload_prepare_hcp_gitops_operator_policy_namespace }}
 spec:
   disabled: false
-  remediationAction: enforce
   policy-templates:
   - objectDefinition:
       apiVersion: policy.open-cluster-management.io/v1
       kind: ConfigurationPolicy
       metadata:
-        name: compliance-operator-namespace
+        name: comp-operator-ns
       spec:
-        remediationAction: enforce
-        severity: high
         object-templates:
         - complianceType: musthave
           objectDefinition:
@@ -23,56 +24,28 @@ spec:
             kind: Namespace
             metadata:
               name: openshift-compliance
-  - objectDefinition:
-      apiVersion: policy.open-cluster-management.io/v1
-      kind: ConfigurationPolicy
-      metadata:
-        name: compliance-operator-operatorgroup
-      spec:
+        pruneObjectBehavior: DeleteIfCreated
         remediationAction: enforce
         severity: high
-        object-templates:
-        - complianceType: musthave
-          objectDefinition:
-            apiVersion: operators.coreos.com/v1
-            kind: OperatorGroup
-            metadata:
-              name: openshift-compliance-operator-og
-              namespace: openshift-compliance
-            spec: {}
   - objectDefinition:
-      apiVersion: policy.open-cluster-management.io/v1
-      kind: ConfigurationPolicy
+      apiVersion: policy.open-cluster-management.io/v1beta1
+      kind: OperatorPolicy
       metadata:
-        name: compliance-operator-subscription
+        name: operatorpolicy-comp-operator
       spec:
+        complianceType: musthave
+        operatorGroup:
+          name: compliance-operator
+          namespace: openshift-compliance
+          targetNamespaces:
+          - openshift-compliance
         remediationAction: enforce
         severity: high
-        object-templates:
-        - complianceType: musthave
-          objectDefinition:
-            apiVersion: operators.coreos.com/v1alpha1
-            kind: Subscription
-            metadata:
-              name: openshift-compliance
-              namespace: openshift-compliance
-            spec:
-              channel: {{ ocp4_workload_prepare_hcp_compliance_operator_channel }}
-              installPlanApproval: {{ ocp4_workload_prepare_hcp_compliance_operator_approval }}
-              name: compliance-operator
-              source: {{ ocp4_workload_prepare_hcp_compliance_operator_source }}
-              sourceNamespace: {{ ocp4_workload_prepare_hcp_compliance_operator_source_namespace }}
----
-apiVersion: policy.open-cluster-management.io/v1
-kind: PlacementBinding
-metadata:
-  name: binding-policy-compliance
-  namespace: {{ ocp4_workload_prepare_hcp_policy_namespace }}
-placementRef:
-  apiGroup: cluster.open-cluster-management.io
-  kind: Placement
-  name: compliance-placement
-subjects:
-- apiGroup: policy.open-cluster-management.io
-  kind: Policy
-  name: policy-compliance-operator
+        subscription:
+          channel: {{ ocp4_workload_prepare_hcp_compliance_operator_channel }}
+          name: compliance-operator
+          namespace: openshift-compliance
+          source: {{ ocp4_workload_prepare_hcp_compliance_operator_source }}
+          sourceNamespace: {{ ocp4_workload_prepare_hcp_compliance_operator_source_namespace }}
+        upgradeApproval: Automatic
+  remediationAction: enforce
