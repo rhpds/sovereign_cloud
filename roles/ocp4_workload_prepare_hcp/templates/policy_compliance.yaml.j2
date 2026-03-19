@@ -48,5 +48,8 @@ spec:
           namespace: openshift-compliance
           source: {{ ocp4_workload_prepare_hcp_compliance_operator_source }}
           sourceNamespace: {{ ocp4_workload_prepare_hcp_compliance_operator_source_namespace }}
-        upgradeApproval: Automatic
+          config:
+              nodeSelector:
+                node-role.kubernetes.io/worker: ""
+                  upgradeApproval: Automatic
   remediationAction: enforce
