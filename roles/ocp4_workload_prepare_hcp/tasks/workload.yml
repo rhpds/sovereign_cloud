@@ -61,7 +61,7 @@
   kubernetes.core.k8s:
     state: present
     template: applicationset_autoshift.yaml.j2
-  
+
 - name: Save user information
   agnosticd.core.agnosticd_user_info:
     data:
