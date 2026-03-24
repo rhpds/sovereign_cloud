@@ -7,7 +7,7 @@
     state: present
     template: managedcluster.yaml.j2
 
-- name: Wait for import manifest to be available 
+- name: Wait for import manifest to be available
   kubernetes.core.k8s_info:
     host: "{{ ocp4_workload_register_sno_rhacm_openshift_api_url }}"
     api_key: "{{ ocp4_workload_register_sno_rhacm_openshift_api_token }}"
