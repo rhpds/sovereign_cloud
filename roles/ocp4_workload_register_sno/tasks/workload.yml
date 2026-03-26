@@ -71,7 +71,7 @@
       -o UserKnownHostsFile=/dev/null
   ansible.builtin.template:
     src: kubeconfig.yaml.j2
-    dest: ~/.kube/config
+    dest: /home/lab-user/.kube/config
     mode: o=rw
 
 - name: Pass through user information about the AWS cluster
