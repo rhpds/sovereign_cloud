@@ -65,7 +65,10 @@
   become: true
   delegate_to: "{{ bastion_ansible_host }}"
   vars:
-    ansible_ssh_extra_args: "-F /dev/null"
+    ansible_ssh_extra_args: >-
+      -F /dev/null
+      -o StrictHostKeyChecking=no
+      -o UserKnownHostsFile=/dev/null
   ansible.builtin.template:
     src: kubeconfig.yaml.j2
     dest: ~/.kube/config
