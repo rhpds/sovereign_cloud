@@ -1,0 +1,25 @@
+---
+apiVersion: cluster.open-cluster-management.io/v1beta1
+kind: Placement
+metadata:
+  name: compliance-operator-placement
+  namespace: {{ ocp4_workload_prepare_environment_compliance_operator_policy_namespace }}
+spec:
+  clusterSets:
+{% for clusterset in ocp4_workload_prepare_environment_compliance_operator_clustersets %}
+  - {{ clusterset }}
+{% endfor %}
+  tolerations:
+  - key: cluster.open-cluster-management.io/unreachable
+    operator: Exists
+  - key: cluster.open-cluster-management.io/unavailable
+    operator: Exists
+  predicates:
+{% for label in ocp4_workload_prepare_environment_compliance_operator_placement_labels %}
+  - requiredClusterSelector:
+      labelSelector:
+        matchLabels:
+{% for key, value in label.items() %}
+          {{ key }}: {{ value }}
+{% endfor %}
+{% endfor %}

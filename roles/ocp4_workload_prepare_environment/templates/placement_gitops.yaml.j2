@@ -3,10 +3,10 @@ apiVersion: cluster.open-cluster-management.io/v1beta1
 kind: Placement
 metadata:
   name: gitops-operator-placement
-  namespace: {{ ocp4_workload_prepare_hcp_gitops_operator_policy_namespace }}
+  namespace: {{ ocp4_workload_prepare_environment_gitops_operator_policy_namespace }}
 spec:
   clusterSets:
-{% for clusterset in ocp4_workload_prepare_hcp_gitops_operator_clustersets %}
+{% for clusterset in ocp4_workload_prepare_environment_gitops_operator_clustersets %}
   - {{ clusterset }}
 {% endfor %}
   tolerations:
@@ -15,7 +15,7 @@ spec:
   - key: cluster.open-cluster-management.io/unavailable
     operator: Exists
   predicates:
-{% for label in ocp4_workload_prepare_hcp_gitops_operator_placement_labels %}
+{% for label in ocp4_workload_prepare_environment_gitops_operator_placement_labels %}
   - requiredClusterSelector:
       labelSelector:
         matchLabels:

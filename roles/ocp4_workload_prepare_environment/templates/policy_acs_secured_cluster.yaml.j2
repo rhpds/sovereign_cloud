@@ -1,0 +1,160 @@
+---
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  annotations:
+    policy.open-cluster-management.io/categories: SC System and Communications Protection
+    policy.open-cluster-management.io/controls: SC-1 Policy and Procedures
+    policy.open-cluster-management.io/standards: NIST SP 800-53
+  name: acs-secured-cluster
+  namespace: {{ ocp4_workload_prepare_environment_acs_policy_namespace }}
+spec:
+  disabled: false
+  policy-templates:
+  - objectDefinition:
+      apiVersion: policy.open-cluster-management.io/v1
+      kind: ConfigurationPolicy
+      metadata:
+        name: acs-operator-namespace
+      spec:
+        object-templates:
+        - complianceType: musthave
+          objectDefinition:
+            apiVersion: v1
+            kind: Namespace
+            metadata:
+              name: {{ ocp4_workload_prepare_environment_acs_operator_namespace }}
+        pruneObjectBehavior: DeleteIfCreated
+        remediationAction: enforce
+        severity: high
+  - objectDefinition:
+      apiVersion: policy.open-cluster-management.io/v1beta1
+      kind: OperatorPolicy
+      metadata:
+        name: operatorpolicy-rhacs-operator
+      spec:
+        complianceType: musthave
+        operatorGroup:
+          name: rhacs-operator
+          namespace: {{ ocp4_workload_prepare_environment_acs_operator_namespace }}
+        remediationAction: enforce
+        severity: high
+        subscription:
+          channel: {{ ocp4_workload_prepare_environment_acs_operator_channel }}
+          name: rhacs-operator
+          namespace: {{ ocp4_workload_prepare_environment_acs_operator_namespace }}
+          source: {{ ocp4_workload_prepare_environment_acs_operator_source }}
+          sourceNamespace: {{ ocp4_workload_prepare_environment_acs_operator_source_namespace }}
+        upgradeApproval: Automatic
+  - objectDefinition:
+      apiVersion: policy.open-cluster-management.io/v1
+      kind: ConfigurationPolicy
+      metadata:
+        name: acs-secured-cluster-namespace
+      spec:
+        object-templates:
+        - complianceType: musthave
+          objectDefinition:
+            apiVersion: v1
+            kind: Namespace
+            metadata:
+              name: {{ ocp4_workload_prepare_environment_acs_secured_cluster_namespace }}
+        pruneObjectBehavior: DeleteIfCreated
+        remediationAction: enforce
+        severity: high
+  - objectDefinition:
+      apiVersion: policy.open-cluster-management.io/v1
+      kind: ConfigurationPolicy
+      metadata:
+        name: acs-init-bundle-collector-tls
+      spec:
+        object-templates:
+        - complianceType: musthave
+          objectDefinition:
+            apiVersion: v1
+            kind: Secret
+            metadata:
+              name: collector-tls
+              namespace: {{ ocp4_workload_prepare_environment_acs_secured_cluster_namespace }}
+            type: Opaque
+            data:
+{% for key, value in r_collector_tls.resources[0].data.items() %}
+              {{ key }}: {{ value }}
+{% endfor %}
+        pruneObjectBehavior: DeleteIfCreated
+        remediationAction: enforce
+        severity: high
+  - objectDefinition:
+      apiVersion: policy.open-cluster-management.io/v1
+      kind: ConfigurationPolicy
+      metadata:
+        name: acs-init-bundle-sensor-tls
+      spec:
+        object-templates:
+        - complianceType: musthave
+          objectDefinition:
+            apiVersion: v1
+            kind: Secret
+            metadata:
+              name: sensor-tls
+              namespace: {{ ocp4_workload_prepare_environment_acs_secured_cluster_namespace }}
+            type: Opaque
+            data:
+{% for key, value in r_sensor_tls.resources[0].data.items() %}
+              {{ key }}: {{ value }}
+{% endfor %}
+        pruneObjectBehavior: DeleteIfCreated
+        remediationAction: enforce
+        severity: high
+  - objectDefinition:
+      apiVersion: policy.open-cluster-management.io/v1
+      kind: ConfigurationPolicy
+      metadata:
+        name: acs-init-bundle-admission-control-tls
+      spec:
+        object-templates:
+        - complianceType: musthave
+          objectDefinition:
+            apiVersion: v1
+            kind: Secret
+            metadata:
+              name: admission-control-tls
+              namespace: {{ ocp4_workload_prepare_environment_acs_secured_cluster_namespace }}
+            type: Opaque
+            data:
+{% for key, value in r_admission_control_tls.resources[0].data.items() %}
+              {{ key }}: {{ value }}
+{% endfor %}
+        pruneObjectBehavior: DeleteIfCreated
+        remediationAction: enforce
+        severity: high
+  - objectDefinition:
+      apiVersion: policy.open-cluster-management.io/v1
+      kind: ConfigurationPolicy
+      metadata:
+        name: acs-secured-cluster-cr
+      spec:
+        object-templates:
+        - complianceType: musthave
+          objectDefinition:
+            apiVersion: platform.stackrox.io/v1alpha1
+            kind: SecuredCluster
+            metadata:
+              name: stackrox-secured-cluster-services
+              namespace: {{ ocp4_workload_prepare_environment_acs_secured_cluster_namespace }}
+            spec:
+              clusterName: '{{ "{{" }}hub .ManagedClusterName hub{{ "}}" }}'
+              centralEndpoint: {{ _ocp4_workload_prepare_environment_acs_central_endpoint }}
+              admissionControl:
+                listenOnCreates: true
+                listenOnEvents: true
+                listenOnUpdates: true
+              perNode:
+                collector:
+                  collection: EBPF
+                  imageFlavor: Regular
+                taintToleration: TolerateTaints
+        pruneObjectBehavior: DeleteIfCreated
+        remediationAction: enforce
+        severity: high
+  remediationAction: enforce

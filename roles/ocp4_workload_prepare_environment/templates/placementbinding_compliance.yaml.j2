@@ -2,13 +2,13 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: PlacementBinding
 metadata:
-  name: policy-gitops
-  namespace: {{ ocp4_workload_prepare_hcp_gitops_operator_policy_namespace }}
+  name: policy-compliance
+  namespace: {{ ocp4_workload_prepare_environment_compliance_operator_policy_namespace }}
 placementRef:
   apiGroup: cluster.open-cluster-management.io
   kind: Placement
-  name: gitops-operator-placement
+  name: compliance-operator-placement
 subjects:
 - apiGroup: policy.open-cluster-management.io
   kind: Policy
-  name: gitops-operator
+  name: compliance-operator

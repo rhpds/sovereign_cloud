@@ -1,0 +1,60 @@
+---
+# ------------------------------------------------
+# Remove RHACM Policy Resources
+# ------------------------------------------------
+- name: Remove PlacementBindings
+  kubernetes.core.k8s:
+    state: absent
+    api_version: policy.open-cluster-management.io/v1
+    kind: PlacementBinding
+    name: "{{ item }}"
+    namespace: "{{ ocp4_workload_prepare_environment_policy_namespace }}"
+  loop:
+  - binding-policy-gitops
+  - policy-acs-secured-cluster
+
+- name: Remove Policies
+  kubernetes.core.k8s:
+    state: absent
+    api_version: policy.open-cluster-management.io/v1
+    kind: Policy
+    name: "{{ item }}"
+    namespace: "{{ ocp4_workload_prepare_environment_policy_namespace }}"
+  loop:
+  - policy-gitops-operator
+  - policy-compliance-operator
+  - acs-secured-cluster
+
+- name: Remove Placements
+  kubernetes.core.k8s:
+    state: absent
+    api_version: cluster.open-cluster-management.io/v1beta1
+    kind: Placement
+    name: "{{ item }}"
+    namespace: "{{ ocp4_workload_prepare_environment_policy_namespace }}"
+  loop:
+  - gitops-placement
+  - compliance-placement
+  - acs-secured-cluster-placement
+
+- name: Remove ManagedClusterSetBinding
+  kubernetes.core.k8s:
+    state: absent
+    api_version: cluster.open-cluster-management.io/v1beta2
+    kind: ManagedClusterSetBinding
+    name: "{{ ocp4_workload_prepare_environment_clusterset_name }}"
+    namespace: "{{ ocp4_workload_prepare_environment_policy_namespace }}"
+
+- name: Remove ManagedClusterSet
+  kubernetes.core.k8s:
+    state: absent
+    api_version: cluster.open-cluster-management.io/v1beta2
+    kind: ManagedClusterSet
+    name: "{{ ocp4_workload_prepare_environment_clusterset_name }}"
+
+- name: Remove policies namespace
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: Namespace
+    name: "{{ ocp4_workload_prepare_environment_policy_namespace }}"

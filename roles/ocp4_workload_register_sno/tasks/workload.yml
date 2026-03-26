@@ -53,6 +53,27 @@
     state: present
     template: managedclusteraddons-policy.yaml.j2
 
+- name: Add bastion to inventory
+  ansible.builtin.add_host:
+    name: "{{ bastion_ansible_host }}"
+    groups: bastions
+    ansible_user: "{{ bastion_ansible_user }}"
+    ansible_ssh_pass: "{{ bastion_ansible_ssh_pass }}"
+    ansible_port: "{{ bastion_ansible_port | default(22) }}"
+
+- name: Set up kubeconfig with both cluster contexts
+  become: true
+  delegate_to: "{{ bastion_ansible_host }}"
+  vars:
+    ansible_ssh_extra_args: >-
+      -F /dev/null
+      -o StrictHostKeyChecking=no
+      -o UserKnownHostsFile=/dev/null
+  ansible.builtin.template:
+    src: kubeconfig.yaml.j2
+    dest: /home/lab-user/.kube/config
+    mode: o=rw
+
 - name: Pass through user information about the AWS cluster
   agnosticd.core.agnosticd_user_info:
     data:
