@@ -8,7 +8,7 @@ metadata:
       Monitoring
     policy.open-cluster-management.io/standards: NIST SP 800-53
   name: compliance-operator
-  namespace: {{ ocp4_workload_prepare_hcp_compliance_operator_policy_namespace }}
+  namespace: {{ ocp4_workload_prepare_environment_compliance_operator_policy_namespace }}
 spec:
   disabled: false
   policy-templates:
@@ -43,11 +43,11 @@ spec:
         remediationAction: enforce
         severity: high
         subscription:
-          channel: {{ ocp4_workload_prepare_hcp_compliance_operator_channel }}
+          channel: {{ ocp4_workload_prepare_environment_compliance_operator_channel }}
           name: compliance-operator
           namespace: openshift-compliance
-          source: {{ ocp4_workload_prepare_hcp_compliance_operator_source }}
-          sourceNamespace: {{ ocp4_workload_prepare_hcp_compliance_operator_source_namespace }}
+          source: {{ ocp4_workload_prepare_environment_compliance_operator_source }}
+          sourceNamespace: {{ ocp4_workload_prepare_environment_compliance_operator_source_namespace }}
           upgradeApproval: Automatic
           config:
             nodeSelector:

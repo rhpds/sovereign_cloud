@@ -3,7 +3,7 @@ apiVersion: policy.open-cluster-management.io/v1
 kind: Policy
 metadata:
   name: gitops-operator
-  namespace: {{ ocp4_workload_prepare_hcp_gitops_operator_policy_namespace }}
+  namespace: {{ ocp4_workload_prepare_environment_gitops_operator_policy_namespace }}
 spec:
   disabled: false
   policy-templates:
@@ -36,10 +36,10 @@ spec:
         remediationAction: enforce
         severity: high
         subscription:
-          channel: {{ ocp4_workload_prepare_hcp_gitops_operator_channel }}
+          channel: {{ ocp4_workload_prepare_environment_gitops_operator_channel }}
           name: openshift-gitops-operator
           namespace: openshift-gitops-operator
-          source: {{ ocp4_workload_prepare_hcp_gitops_operator_source }}
-          sourceNamespace: {{ ocp4_workload_prepare_hcp_gitops_operator_source_namespace }}
+          source: {{ ocp4_workload_prepare_environment_gitops_operator_source }}
+          sourceNamespace: {{ ocp4_workload_prepare_environment_gitops_operator_source_namespace }}
         upgradeApproval: Automatic
   remediationAction: enforce

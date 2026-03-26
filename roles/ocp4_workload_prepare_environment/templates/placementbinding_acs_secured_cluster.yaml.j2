@@ -2,13 +2,13 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: PlacementBinding
 metadata:
-  name: policy-compliance
-  namespace: {{ ocp4_workload_prepare_hcp_compliance_operator_policy_namespace }}
+  name: policy-acs-secured-cluster
+  namespace: {{ ocp4_workload_prepare_environment_acs_policy_namespace }}
 placementRef:
   apiGroup: cluster.open-cluster-management.io
   kind: Placement
-  name: compliance-operator-placement
+  name: acs-secured-cluster-placement
 subjects:
 - apiGroup: policy.open-cluster-management.io
   kind: Policy
-  name: compliance-operator
+  name: acs-secured-cluster

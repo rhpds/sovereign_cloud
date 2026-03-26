@@ -1,0 +1,14 @@
+---
+apiVersion: policy.open-cluster-management.io/v1
+kind: PlacementBinding
+metadata:
+  name: policy-gitops
+  namespace: {{ ocp4_workload_prepare_environment_gitops_operator_policy_namespace }}
+placementRef:
+  apiGroup: cluster.open-cluster-management.io
+  kind: Placement
+  name: gitops-operator-placement
+subjects:
+- apiGroup: policy.open-cluster-management.io
+  kind: Policy
+  name: gitops-operator

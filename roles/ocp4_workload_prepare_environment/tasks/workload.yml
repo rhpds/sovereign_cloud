@@ -1,0 +1,77 @@
+---
+- name: Create policies namespace
+  kubernetes.core.k8s:
+    state: present
+    api_version: v1
+    kind: Namespace
+    name: "{{ ocp4_workload_prepare_environment_policy_namespace }}"
+
+- name: Get ACS Central route from hub
+  kubernetes.core.k8s_info:
+    api_version: route.openshift.io/v1
+    kind: Route
+    name: central
+    namespace: "{{ ocp4_workload_prepare_environment_acs_init_bundle_namespace }}"
+  register: r_acs_central_route
+
+- name: Set ACS Central endpoint fact
+  ansible.builtin.set_fact:
+    _ocp4_workload_prepare_environment_acs_central_endpoint: >-
+      {{ r_acs_central_route.resources[0].spec.host }}:443
+
+- name: Get collector-tls secret from hub
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: collector-tls
+    namespace: "{{ ocp4_workload_prepare_environment_acs_init_bundle_namespace }}"
+  register: r_collector_tls
+
+- name: Get sensor-tls secret from hub
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: sensor-tls
+    namespace: "{{ ocp4_workload_prepare_environment_acs_init_bundle_namespace }}"
+  register: r_sensor_tls
+
+- name: Get admission-control-tls secret from hub
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: admission-control-tls
+    namespace: "{{ ocp4_workload_prepare_environment_acs_init_bundle_namespace }}"
+  register: r_admission_control_tls
+
+- name: Verify init bundle secrets exist
+  ansible.builtin.assert:
+    that:
+    - r_collector_tls.resources | length > 0
+    - r_sensor_tls.resources | length > 0
+    - r_admission_control_tls.resources | length > 0
+    fail_msg: >-
+      Init bundle secrets not found in namespace
+      {{ ocp4_workload_prepare_environment_acs_init_bundle_namespace }}.
+      Create an init bundle in ACS Central first.
+
+- name: Create ManagedClusterSet and policies
+  kubernetes.core.k8s:
+    state: present
+    template: "{{ item }}"
+  loop:
+  - managedclusterset.yaml.j2
+  - managedclustersetbinding.yaml.j2
+  - policy_gitops.yaml.j2
+  - placement_gitops.yaml.j2
+  - placementbinding_gitops.yaml.j2
+  - policy_compliance.yaml.j2
+  - placement_compliance.yaml.j2
+  - placementbinding_compliance.yaml.j2
+  - policy_acs_secured_cluster.yaml.j2
+  - placement_acs_secured_cluster.yaml.j2
+  - placementbinding_acs_secured_cluster.yaml.j2
+
+- name: Create Autoshift ApplicationSet
+  kubernetes.core.k8s:
+    state: present
+    template: applicationset_autoshift.yaml.j2

@@ -2,11 +2,11 @@
 apiVersion: cluster.open-cluster-management.io/v1beta1
 kind: Placement
 metadata:
-  name: compliance-operator-placement
-  namespace: {{ ocp4_workload_prepare_hcp_compliance_operator_policy_namespace }}
+  name: acs-secured-cluster-placement
+  namespace: {{ ocp4_workload_prepare_environment_acs_policy_namespace }}
 spec:
   clusterSets:
-{% for clusterset in ocp4_workload_prepare_hcp_compliance_operator_clustersets %}
+{% for clusterset in ocp4_workload_prepare_environment_acs_clustersets %}
   - {{ clusterset }}
 {% endfor %}
   tolerations:
@@ -14,8 +14,9 @@ spec:
     operator: Exists
   - key: cluster.open-cluster-management.io/unavailable
     operator: Exists
+{% if ocp4_workload_prepare_environment_acs_placement_labels | length > 0 %}
   predicates:
-{% for label in ocp4_workload_prepare_hcp_compliance_operator_placement_labels %}
+{% for label in ocp4_workload_prepare_environment_acs_placement_labels %}
   - requiredClusterSelector:
       labelSelector:
         matchLabels:
@@ -23,3 +24,4 @@ spec:
           {{ key }}: {{ value }}
 {% endfor %}
 {% endfor %}
+{% endif %}

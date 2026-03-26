@@ -1,0 +1,3 @@
+= ocp4_workload_prepare_environment - Set up for the workshop / demo environment
+
+See defaults/main.yml for variables to set.

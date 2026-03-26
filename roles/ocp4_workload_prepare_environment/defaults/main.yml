@@ -1,0 +1,62 @@
+---
+# ------------------------------------------------
+# Prepare RHACM environment
+# ------------------------------------------------
+
+# ------------------------------------------------
+# RHACM Policy Configuration for GitOps Operator
+# ------------------------------------------------
+ocp4_workload_prepare_environment_policy_namespace: policies
+ocp4_workload_prepare_environment_clusterset_name: managed
+ocp4_workload_prepare_environment_clusterset_binding_namespace: policies
+
+# GitOps Operator Configuration
+ocp4_workload_prepare_environment_gitops_operator_policy_namespace: policies
+ocp4_workload_prepare_environment_gitops_operator_channel: gitops-1.19
+ocp4_workload_prepare_environment_gitops_operator_source: redhat-operators
+ocp4_workload_prepare_environment_gitops_operator_source_namespace: openshift-marketplace
+# Clustersets to target with Placement
+ocp4_workload_prepare_environment_gitops_operator_clustersets:
+- "{{ ocp4_workload_prepare_environment_clusterset_name }}"
+# Labels to target with Placement
+ocp4_workload_prepare_environment_gitops_operator_placement_labels:
+- cloud: Amazon
+- cloud: BareMetal
+
+# ------------------------------------------------
+# RHACM Policy Configuration for Compliance Operator
+# ------------------------------------------------
+ocp4_workload_prepare_environment_compliance_operator_policy_namespace: open-cluster-management-global-set
+ocp4_workload_prepare_environment_compliance_operator_channel: stable
+ocp4_workload_prepare_environment_compliance_operator_source: redhat-operators
+ocp4_workload_prepare_environment_compliance_operator_source_namespace: openshift-marketplace
+
+# Clustersets to target with Placement
+ocp4_workload_prepare_environment_compliance_operator_clustersets:
+- global
+
+# Labels to target with Placement
+ocp4_workload_prepare_environment_compliance_operator_placement_labels: []
+
+# ------------------------------------------------
+# RHACM Policy Configuration for ACS Secured Cluster
+# ------------------------------------------------
+ocp4_workload_prepare_environment_acs_policy_namespace: policies
+ocp4_workload_prepare_environment_acs_operator_channel: rhacs-4.10
+ocp4_workload_prepare_environment_acs_operator_source: redhat-operators
+ocp4_workload_prepare_environment_acs_operator_source_namespace: openshift-marketplace
+ocp4_workload_prepare_environment_acs_operator_namespace: rhacs-operator
+ocp4_workload_prepare_environment_acs_secured_cluster_namespace: stackrox
+ocp4_workload_prepare_environment_acs_init_bundle_namespace: stackrox
+
+# Clustersets to target with Placement
+ocp4_workload_prepare_environment_acs_clustersets:
+- "{{ ocp4_workload_prepare_environment_clusterset_name }}"
+
+# Labels to target with Placement
+ocp4_workload_prepare_environment_acs_placement_labels: []
+
+# ------------------------------------------------
+# ApplicationSet for Autoshift
+# ------------------------------------------------
+ocp4_workload_prepare_environment_autoshift_version: "0.0.4"
