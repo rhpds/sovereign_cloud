@@ -73,7 +73,7 @@ ocp4_workload_prepare_environment_vm_password: ""
 ocp4_workload_prepare_environment_vm_ssh_pwauth: true
 ocp4_workload_prepare_environment_vm_disksize: 30Gi
 ocp4_workload_prepare_environment_vm_instancetype: u1.medium
-ocp4_workload_prepare_environment_vm_satellite_url: "{{ satellite_url }}"
-ocp4_workload_prepare_environment_vm_satellite_org: "{{ satellite_org }}"
-ocp4_workload_prepare_environment_vm_satellite_activationkey: "{{ satellite_activationkey }}"
+ocp4_workload_prepare_environment_vm_satellite_url: ""
+ocp4_workload_prepare_environment_vm_satellite_org: ""
+ocp4_workload_prepare_environment_vm_satellite_activationkey: ""
 ocp4_workload_prepare_environment_vm_init_script_url: ""

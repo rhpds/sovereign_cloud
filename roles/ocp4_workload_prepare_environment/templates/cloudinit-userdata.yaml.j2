@@ -10,7 +10,7 @@ runcmd:
   - rpm -Uvh /tmp/katello-ca-consumer-latest.noarch.rpm
   - |
     subscription-manager register \
-      --activationkey="{{ ocp4_workload_prepare_environment_vm_satellite_activation_key }}" \
+      --activationkey="{{ ocp4_workload_prepare_environment_vm_satellite_activationkey }}" \
       --org="{{ ocp4_workload_prepare_environment_vm_satellite_org }}" \
       --force
 {% endif %}
