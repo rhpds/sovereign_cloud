@@ -1,0 +1,51 @@
+---
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: {{ ocp4_workload_prepare_environment_vm_name }}
+  namespace: {{ ocp4_workload_prepare_environment_vm_namespace }}
+spec:
+  dataVolumeTemplates:
+  - metadata:
+      name: {{ ocp4_workload_prepare_environment_vm_name }}-volume
+    spec:
+      sourceRef:
+        kind: DataSource
+        name: {{ ocp4_workload_prepare_environment_vm_datasource_name }}
+        namespace: {{ ocp4_workload_prepare_environment_vm_datasource_namespace }}
+      storage:
+        resources:
+          requests:
+            storage: {{ ocp4_workload_prepare_environment_vm_disksize }}
+  instancetype:
+    kind: virtualmachineclusterinstancetype
+    name: {{ ocp4_workload_prepare_environment_vm_instancetype }}
+  preference:
+    kind: virtualmachineclusterpreference
+    name: rhel.10
+  runStrategy: Always
+  template:
+    metadata:
+      labels:
+        network.kubevirt.io/headlessService: headless
+    spec:
+      architecture: amd64
+      domain:
+        devices:
+          disks:
+          - bootOrder: 1
+            name: rootdisk
+          - disk:
+              bus: virtio
+            name: cloudinitdisk
+        machine:
+          type: pc-q35-rhel9.6.0
+        resources: {}
+      subdomain: headless
+      volumes:
+      - name: rootdisk
+        dataVolume:
+          name: {{ ocp4_workload_prepare_environment_vm_name }}-volume
+      - name: cloudinitdisk
+        cloudInitNoCloud:
+          userDataBase64: {{ lookup('template', 'cloudinit-userdata.yaml.j2') | b64encode }}

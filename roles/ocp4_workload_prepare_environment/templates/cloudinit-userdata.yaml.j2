@@ -1,0 +1,22 @@
+#cloud-config
+chpasswd:
+  expire: false
+ssh_pwauth: {{ 'true' if ocp4_workload_prepare_environment_vm_ssh_pwauth | bool else 'false' }}
+password: {{ ocp4_workload_prepare_environment_vm_password }}
+user: {{ ocp4_workload_prepare_environment_vm_user }}
+runcmd:
+{% if ocp4_workload_prepare_environment_vm_satellite_url | length > 0 %}
+  - curl -k -o /tmp/katello-ca-consumer-latest.noarch.rpm https://{{ ocp4_workload_prepare_environment_vm_satellite_url }}/pub/katello-ca-consumer-latest.noarch.rpm
+  - rpm -Uvh /tmp/katello-ca-consumer-latest.noarch.rpm
+  - |
+    subscription-manager register \
+      --activationkey="{{ ocp4_workload_prepare_environment_vm_satellite_activation_key }}" \
+      --org="{{ ocp4_workload_prepare_environment_vm_satellite_org }}" \
+      --force
+{% endif %}
+{% if ocp4_workload_prepare_environment_vm_init_script_url | length > 0 %}
+  - curl -sL -o /tmp/init.sh {{ ocp4_workload_prepare_environment_vm_init_script_url }}
+  - chmod +x /tmp/init.sh
+  - /tmp/init.sh
+{% endif %}
+  - echo "Setup complete"

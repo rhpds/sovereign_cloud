@@ -60,3 +60,20 @@ ocp4_workload_prepare_environment_acs_placement_labels: []
 # ApplicationSet for Autoshift
 # ------------------------------------------------
 ocp4_workload_prepare_environment_autoshift_version: "0.0.4"
+
+# ------------------------------------------------
+# VirtualMachine for scanning
+# ------------------------------------------------
+ocp4_workload_prepare_environment_vm_name: rhel
+ocp4_workload_prepare_environment_vm_namespace: rhelvm
+ocp4_workload_prepare_environment_vm_datasource_name: rhel10
+ocp4_workload_prepare_environment_vm_datasource_namespace: openshift-virtualization-os-images
+ocp4_workload_prepare_environment_vm_user: rhel
+ocp4_workload_prepare_environment_vm_password: ""
+ocp4_workload_prepare_environment_vm_ssh_pwauth: true
+ocp4_workload_prepare_environment_vm_disksize: 30Gi
+ocp4_workload_prepare_environment_vm_instancetype: u1.medium
+ocp4_workload_prepare_environment_vm_satellite_url: "{{ satellite_url }}"
+ocp4_workload_prepare_environment_vm_satellite_org: "{{ satellite_org }}"
+ocp4_workload_prepare_environment_vm_satellite_activationkey: "{{ satellite_activationkey }}"
+ocp4_workload_prepare_environment_vm_init_script_url: ""
