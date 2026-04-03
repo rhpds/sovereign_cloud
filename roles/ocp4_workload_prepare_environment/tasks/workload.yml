@@ -75,3 +75,11 @@
   kubernetes.core.k8s:
     state: present
     template: applicationset_autoshift.yaml.j2
+
+- name: Create VM for scanning
+  kubernetes.core.k8s:
+    state: present
+    template: "{{ item }}"
+  loop:
+  - namespace-vm.yaml.j2
+  - vm.yaml.j2
