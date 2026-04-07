@@ -48,4 +48,31 @@ spec:
           name: {{ ocp4_workload_prepare_environment_vm_name }}-volume
       - name: cloudinitdisk
         cloudInitNoCloud:
-          userDataBase64: {{ lookup('template', 'cloudinit-userdata.yaml.j2') | b64encode }}
+          userData: |
+            #cloud-config
+            users:
+              - name: {{ ocp4_workload_prepare_environment_vm__user | trim }}
+                groups: wheel
+                sudo: ALL=(ALL) NOPASSWD:ALL
+                lock_passwd: false
+                shell: /bin/bash
+                plain_text_passwd: {{ ocp4_workload_prepare_environment_vm__password | trim }}
+            chpasswd:
+              expire: false
+            ssh_pwauth: true
+            runcmd:
+            {% if ocp4_workload_prepare_environment_vm__satellite_url | trim | length > 0 %}
+              - curl -k -o /tmp/katello-ca-consumer-latest.noarch.rpm https://{{ ocp4_workload_prepare_environment_vm__satellite_url | trim }}/pub/katello-ca-consumer-latest.noarch.rpm
+              - rpm -Uvh /tmp/katello-ca-consumer-latest.noarch.rpm
+              - |
+                subscription-manager register \
+                  --activationkey="{{ ocp4_workload_prepare_environment_vm__satellite_activation_key | trim }}" \
+                  --org="{{ ocp4_workload_prepare_environment_vm__satellite_org | trim }}" \
+                  --force
+            {% endif %}
+            {% if ocp4_workload_prepare_environment_vm__init_script_url | trim | length > 0 %}
+              - curl -sL -o /tmp/init.sh {{ ocp4_workload_prepare_environment_vm__init_script_url | trim }}
+              - chmod +x /tmp/init.sh
+              - /tmp/init.sh
+            {% endif %}
+              - echo "Setup complete"
