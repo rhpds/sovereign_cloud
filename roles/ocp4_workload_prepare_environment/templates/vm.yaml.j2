@@ -88,6 +88,7 @@ spec:
                 subscription-manager register \
                   --activationkey="{{ ocp4_workload_prepare_environment_vm_satellite_activationkey | trim }}" \
                   --org="{{ ocp4_workload_prepare_environment_vm_satellite_org | trim }}" \
+                  --name="rhel-webserver-{{ guid }}" \
                   --force
 {% endif %}
 {% if ocp4_workload_prepare_environment_vm_init_script_url | trim | length > 0 %}
