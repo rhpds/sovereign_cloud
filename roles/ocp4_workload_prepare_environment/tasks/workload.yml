@@ -83,3 +83,11 @@
   loop:
   - namespace-vm.yaml.j2
   - vm.yaml.j2
+
+- name: Save VM user information
+  agnosticd.core.agnosticd_user_info:
+    data:
+      rhel_vm_name: "{{ ocp4_workload_prepare_environment_vm_name }}"
+      rhel_vm_namespace: "{{ ocp4_workload_prepare_environment_vm_namespace }}"
+      rhel_vm_user: "{{ ocp4_workload_prepare_environment_vm_user }}"
+      rhel_vm_password: "{{ ocp4_workload_prepare_environment_vm_password }}"
