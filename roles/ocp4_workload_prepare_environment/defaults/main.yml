@@ -60,6 +60,8 @@ ocp4_workload_prepare_environment_acs_placement_labels: []
 # ApplicationSet for Autoshift
 # ------------------------------------------------
 ocp4_workload_prepare_environment_autoshift_version: "0.0.4"
+# Set to true to deploy Autoshift policies in inform (dry-run) mode
+ocp4_workload_prepare_environment_autoshift_dryrun: true
 
 # ------------------------------------------------
 # VirtualMachine for scanning

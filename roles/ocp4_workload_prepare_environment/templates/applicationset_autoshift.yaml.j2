@@ -22,6 +22,8 @@ spec:
       values: |
         autoshiftOciRegistry: true
         autoshiftOciRepo: oci://quay.io/autoshift/policies
+        autoshift:
+          dryRun: {{ ocp4_workload_prepare_environment_autoshift_dryrun | bool }}
   destination:
     server: https://kubernetes.default.svc
     namespace: openshift-gitops
