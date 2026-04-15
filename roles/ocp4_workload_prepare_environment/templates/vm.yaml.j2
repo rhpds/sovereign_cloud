@@ -90,6 +90,11 @@ spec:
                   --org="{{ ocp4_workload_prepare_environment_vm_satellite_org | trim }}" \
                   --name="rhel-webserver-{{ guid }}" \
                   --force
+              - subscription-manager release --set=10
+              - |
+                subscription-manager repos \
+                --enable=rhel-10-for-x86_64-baseos-rpms \
+                --enable=rhel-10-for-x86_64-appstream-rpms
 {% endif %}
 {% if ocp4_workload_prepare_environment_vm_init_script_url | trim | length > 0 %}
               - curl -sL -o /tmp/init.sh {{ ocp4_workload_prepare_environment_vm_init_script_url | trim }}
