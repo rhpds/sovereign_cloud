@@ -8,7 +8,7 @@ ocp4_workload_osac_namespace: osac-demo
 
 # Installer git repo
 ocp4_workload_osac_installer_repo: https://github.com/osac-project/osac-installer.git
-ocp4_workload_osac_installer_version: HEAD
+ocp4_workload_osac_installer_version: main
 
 # Helm binary mirror
 ocp4_workload_osac_helm_mirror: https://mirror.openshift.com/pub/openshift-v4/clients

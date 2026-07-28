@@ -4,50 +4,53 @@
     _ocp4_workload_osac_helm_url: >-
       {{ '{0}/helm/latest/helm-linux-amd64.tar.gz'.format(ocp4_workload_osac_helm_mirror) }}
 
-- name: Install Helm
-  become: true
-  ansible.builtin.unarchive:
-    src: "{{ _ocp4_workload_osac_helm_url }}"
-    remote_src: true
-    dest: /usr/bin
-    mode: "0775"
-    owner: root
-    group: root
-  retries: 10
-  register: r_helm_install
-  until: r_helm_install is success
-  delay: 30
+- name: Run on Bastion
+  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
+  block:
+  - name: Install Helm
+    become: true
+    ansible.builtin.unarchive:
+      src: "{{ _ocp4_workload_osac_helm_url }}"
+      remote_src: true
+      dest: /usr/bin
+      mode: ug=rwx,go=rx
+      owner: root
+      group: root
+    retries: 10
+    register: r_helm_install
+    until: r_helm_install is success
+    delay: 30
 
-- name: Clone osac-installer and initialize submodules
-  ansible.builtin.git:
-    repo: "{{ ocp4_workload_osac_installer_repo }}"
-    dest: "{{ ansible_env.HOME }}/osac-installer"
-    recursive: true
-    version: "{{ ocp4_workload_osac_installer_version }}"
+  - name: Clone osac-installer and initialize submodules
+    ansible.builtin.git:
+      repo: "{{ ocp4_workload_osac_installer_repo }}"
+      dest: "{{ ansible_env.HOME }}/osac-installer"
+      recursive: true
+      version: "{{ ocp4_workload_osac_installer_version }}"
 
-- name: Ensure values directory exists
-  ansible.builtin.file:
-    path: "{{ ansible_env.HOME }}/osac-installer/values/demo"
-    state: directory
-    mode: "0755"
+  - name: Ensure values directory exists
+    ansible.builtin.file:
+      path: "{{ ansible_env.HOME }}/osac-installer/values/demo"
+      state: directory
+      mode: ug=rwx,go=rx
 
-- name: Write OSAC values file
-  ansible.builtin.template:
-    src: values.yaml.j2
-    dest: "{{ ansible_env.HOME }}/osac-installer/values/demo/values.yaml"
-    mode: "0644"
+  - name: Write OSAC values file
+    ansible.builtin.template:
+      src: values.yaml.j2
+      dest: "{{ ansible_env.HOME }}/osac-installer/values/demo/values.yaml"
+      mode: ug=rw,go=r
 
-- name: Write AAP license file
-  ansible.builtin.copy:
-    content: "{{ ocp4_workload_osac_aap_license }}"
-    dest: "{{ ansible_env.HOME }}/osac-installer/values/demo/license.zip"
-    mode: "0644"
+  - name: Write AAP license file
+    ansible.builtin.copy:
+      content: "{{ ocp4_workload_osac_aap_license | b64decode }}"
+      dest: "{{ ansible_env.HOME }}/osac-installer/values/demo/license.zip"
+      mode: ug=rw,go=r
 
-- name: Run OSAC installer
-  ansible.builtin.command:
-    cmd: >-
-      make install
-      VALUES_FILE=values/demo/values.yaml
-      INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
-    chdir: "{{ ansible_env.HOME }}/osac-installer"
-  changed_when: true
+  - name: Run OSAC installer
+    ansible.builtin.command:
+      cmd: >-
+        make install
+        VALUES_FILE=values/demo/values.yaml
+        INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
+      chdir: "{{ ansible_env.HOME }}/osac-installer"
+    changed_when: true
