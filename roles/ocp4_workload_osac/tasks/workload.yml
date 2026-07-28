@@ -81,6 +81,8 @@
         INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
       chdir: "~{{ ansible_user }}/osac-installer"
     changed_when: true
+    async: 7200
+    poll: 30
 
 - name: Patch tenant shared storage class status
   kubernetes.core.k8s:
