@@ -1,4 +1,25 @@
 ---
+- name: Adopt pre-existing cert-manager namespaces for Helm
+  kubernetes.core.k8s:
+    state: patched
+    api_version: v1
+    kind: Namespace
+    name: "{{ item }}"
+    definition:
+      metadata:
+        labels:
+          app.kubernetes.io/managed-by: Helm
+        annotations:
+          meta.helm.sh/release-name: osac-operators
+          meta.helm.sh/release-namespace: osac-operators
+  loop:
+  - cert-manager-operator
+  - cert-manager
+  register: r_adopt_ns
+  failed_when:
+  - r_adopt_ns is failed
+  - "'not found' not in (r_adopt_ns.msg | default(''))"
+
 - name: Set Helm download URL
   ansible.builtin.set_fact:
     _ocp4_workload_osac_helm_url: >-
@@ -28,6 +49,12 @@
       recursive: true
       version: "{{ ocp4_workload_osac_installer_version }}"
 
+  - name: Patch Makefile to add --take-ownership to helm upgrade calls
+    ansible.builtin.replace:
+      path: "~{{ ansible_user }}/osac-installer/Makefile"
+      regexp: '--timeout'
+      replace: '--take-ownership --timeout'
+
   - name: Ensure values directory exists
     ansible.builtin.file:
       path: "~{{ ansible_user }}/osac-installer/values/demo"
@@ -42,7 +69,7 @@
 
   - name: Write AAP license file
     ansible.builtin.copy:
-      content: "{{ ocp4_workload_osac_aap_license | b64decode }}"
+      content: "{{ ocp4_workload_osac_aap_license }}"
       dest: "~{{ ansible_user }}/osac-installer/values/demo/license.zip"
       mode: ug=rw,go=r
 
