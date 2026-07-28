@@ -81,3 +81,29 @@
         INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
       chdir: "~{{ ansible_user }}/osac-installer"
     changed_when: true
+
+- name: Patch tenant shared storage class status
+  kubernetes.core.k8s:
+    state: patched
+    api_version: osac.openshift.io/v1alpha1
+    kind: Tenant
+    name: shared
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    subresource: status
+    definition:
+      status:
+        storageClasses:
+        - name: "{{ ocp4_workload_osac_storage_class }}"
+          tier: default
+
+- name: Label storage class for OSAC tenant
+  kubernetes.core.k8s:
+    state: patched
+    api_version: storage.k8s.io/v1
+    kind: StorageClass
+    name: "{{ ocp4_workload_osac_storage_class }}"
+    definition:
+      metadata:
+        labels:
+          osac.openshift.io/tenant: Default
+          osac.openshift.io/storage-tier: default

@@ -39,6 +39,11 @@ ocp4_workload_osac_cluster_versions:
   default: true
 
 # ------------------------------------------------
+# Storage class for tenant patching
+# ------------------------------------------------
+ocp4_workload_osac_storage_class: ocs-external-storagecluster-ceph-rbd
+
+# ------------------------------------------------
 # AAP License (required, Ansible-vaulted license.zip)
 # Provide via inventory or extra vars:
 #   ocp4_workload_osac_aap_license: "{{ vault_aap_license }}"
