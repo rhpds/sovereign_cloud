@@ -24,26 +24,26 @@
   - name: Clone osac-installer and initialize submodules
     ansible.builtin.git:
       repo: "{{ ocp4_workload_osac_installer_repo }}"
-      dest: "~{{ ansible_user }} }}/osac-installer"
+      dest: "~{{ ansible_user }}/osac-installer"
       recursive: true
       version: "{{ ocp4_workload_osac_installer_version }}"
 
   - name: Ensure values directory exists
     ansible.builtin.file:
-      path: "~{{ ansible_user }} }}/osac-installer/values/demo"
+      path: "~{{ ansible_user }}/osac-installer/values/demo"
       state: directory
       mode: ug=rwx,go=rx
 
   - name: Write OSAC values file
     ansible.builtin.template:
       src: values.yaml.j2
-      dest: "~{{ ansible_user }} }}/osac-installer/values/demo/values.yaml"
+      dest: "~{{ ansible_user }}/osac-installer/values/demo/values.yaml"
       mode: ug=rw,go=r
 
   - name: Write AAP license file
     ansible.builtin.copy:
       content: "{{ ocp4_workload_osac_aap_license | b64decode }}"
-      dest: "~{{ ansible_user }} }}/osac-installer/values/demo/license.zip"
+      dest: "~{{ ansible_user }}/osac-installer/values/demo/license.zip"
       mode: ug=rw,go=r
 
   - name: Run OSAC installer
@@ -52,5 +52,5 @@
         make install
         VALUES_FILE=values/demo/values.yaml
         INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
-      chdir: "~{{ ansible_user }} }}/osac-installer"
+      chdir: "~{{ ansible_user }}/osac-installer"
     changed_when: true
