@@ -1,0 +1,45 @@
+---
+# ------------------------------------------------
+# OSAC (Open Sovereign Architecture Cloud) Workload
+# ------------------------------------------------
+
+# Installer namespace
+ocp4_workload_osac_namespace: osac-demo
+
+# Installer git repo
+ocp4_workload_osac_installer_repo: https://github.com/osac-project/osac-installer.git
+ocp4_workload_osac_installer_version: HEAD
+
+# Helm binary mirror
+ocp4_workload_osac_helm_mirror: https://mirror.openshift.com/pub/openshift-v4/clients
+
+# ------------------------------------------------
+# OpenShift / RHCOS versions for MCE osImages
+# ------------------------------------------------
+ocp4_workload_osac_openshift_version: "4.22"
+ocp4_workload_osac_rhcos_version: "9.8.20260428-0"
+
+# ------------------------------------------------
+# Container images
+# ------------------------------------------------
+ocp4_workload_osac_operator_image: ghcr.io/osac-project/osac-operator:latest
+ocp4_workload_osac_fulfillment_service_image: ghcr.io/osac-project/fulfillment-service:latest
+ocp4_workload_osac_envoy_image: ghcr.io/osac-project/envoy:v1.33.0
+ocp4_workload_osac_ui_image: ghcr.io/osac-project/osac-ui:latest
+ocp4_workload_osac_aap_bootstrap_image: ghcr.io/osac-project/osac-aap:latest
+
+# ------------------------------------------------
+# Cluster versions for CaaS
+# ------------------------------------------------
+ocp4_workload_osac_cluster_versions:
+- version: "4.20.0"
+  image: "quay.io/openshift-release-dev/ocp-release:4.20.0-multi"
+- version: "4.22.0"
+  image: "quay.io/openshift-release-dev/ocp-release:4.22.0-multi"
+  default: true
+
+# ------------------------------------------------
+# AAP License (required, Ansible-vaulted license.zip)
+# Provide via inventory or extra vars:
+#   ocp4_workload_osac_aap_license: "{{ vault_aap_license }}"
+# ------------------------------------------------
