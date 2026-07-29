@@ -100,11 +100,12 @@
       mode: ug=rw,go=r
 
   - name: Run OSAC installer
-    ansible.builtin.command:
+    ansible.builtin.shell:
       cmd: >-
         make install
         VALUES_FILE=values/demo/values.yaml
         INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
+        2>&1 | tee ~{{ ansible_user }}/.osac_install.log
       chdir: "~{{ ansible_user }}/osac-installer"
     changed_when: true
     async: 7200
