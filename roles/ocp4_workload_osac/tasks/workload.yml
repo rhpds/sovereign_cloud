@@ -28,6 +28,12 @@
 - name: Run on Bastion
   delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
   block:
+  - name: Install make
+    become: true
+    ansible.builtin.package:
+      name: make
+      state: present
+
   - name: Install Helm
     become: true
     ansible.builtin.unarchive:
