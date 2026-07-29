@@ -153,7 +153,7 @@
     label_selectors:
     - "operators.coreos.com/{{ item.operator }}"
   loop:
-  - operator: kubevirt-hyperconverged-operator.openshift-cnv
+  - operator: kubevirt-hyperconverged.openshift-cnv
     namespace: openshift-cnv
   - operator: multicluster-engine.multicluster-engine
     namespace: multicluster-engine
