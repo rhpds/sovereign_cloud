@@ -48,6 +48,11 @@
     until: r_helm_install is success
     delay: 30
 
+  - name: Ensure osac-installer directory does not exist
+    ansible.builtin.file:
+      path: "~{{ ansible_user }}/osac-installer"
+      state: absent
+
   - name: Clone osac-installer and initialize submodules
     ansible.builtin.git:
       repo: "{{ ocp4_workload_osac_installer_repo }}"
