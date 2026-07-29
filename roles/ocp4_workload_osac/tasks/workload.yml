@@ -28,25 +28,40 @@
 - name: Run on Bastion
   delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
   block:
-  - name: Install make
+  - name: Root operations
     become: true
-    ansible.builtin.package:
-      name: make
-      state: present
+    block:
+    - name: Install make
+      ansible.builtin.package:
+        name: make
+        state: present
 
-  - name: Install Helm
-    become: true
-    ansible.builtin.unarchive:
-      src: "{{ _ocp4_workload_osac_helm_url }}"
-      remote_src: true
-      dest: /usr/bin
-      mode: ug=rwx,go=rx
-      owner: root
-      group: root
-    retries: 10
-    register: r_helm_install
-    until: r_helm_install is success
-    delay: 30
+    - name: Install Helm
+      ansible.builtin.unarchive:
+        src: "{{ _ocp4_workload_osac_helm_url }}"
+        remote_src: true
+        dest: /usr/bin
+        mode: ug=rwx,go=rx
+        owner: root
+        group: root
+      retries: 10
+      register: r_helm_install
+      until: r_helm_install is success
+      delay: 30
+
+    - name: Rename helm binary
+      ansible.builtin.copy:
+        src: /usr/bin/helm-linux-amd64
+        dest: /usr/bin/helm
+        remote_src: true
+        mode: ug=rwx,go=rx
+        owner: root
+        group: root
+
+    - name: Remove original helm binary
+      ansible.builtin.file:
+        path: /usr/bin/helm-linux-amd64
+        state: absent
 
   - name: Ensure osac-installer directory does not exist
     ansible.builtin.file:
