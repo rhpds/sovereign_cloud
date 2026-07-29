@@ -1,4 +1,13 @@
 ---
+- name: Remove pre-existing cert-manager OperatorGroup to avoid conflict with Helm
+  kubernetes.core.k8s:
+    state: absent
+    api_version: operators.coreos.com/v1
+    kind: OperatorGroup
+    name: cert-manager-operator
+    namespace: cert-manager-operator
+  failed_when: false
+
 - name: Adopt pre-existing cert-manager namespaces for Helm
   kubernetes.core.k8s:
     state: patched
