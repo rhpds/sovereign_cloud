@@ -99,6 +99,20 @@
       dest: "~{{ ansible_user }}/osac-installer/values/demo/license.zip"
       mode: ug=rw,go=r
 
+  - name: Delete leftover Helm hook jobs from previous runs
+    kubernetes.core.k8s:
+      state: absent
+      api_version: batch/v1
+      kind: Job
+      name: "{{ item.name }}"
+      namespace: "{{ item.namespace }}"
+    loop:
+    - name: osac-prereqs-configure-cnv
+      namespace: osac-prereqs
+    - name: seed-cluster-versions
+      namespace: "{{ ocp4_workload_osac_namespace }}"
+    failed_when: false
+
   - name: Run OSAC installer
     ansible.builtin.shell:
       cmd: >-
