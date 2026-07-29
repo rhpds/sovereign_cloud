@@ -114,6 +114,16 @@
       regexp: '--timeout'
       replace: '--take-ownership --timeout'
 
+  - name: Increase backoffLimit on prereqs hook jobs
+    ansible.builtin.replace:
+      path: "~{{ ansible_user }}/osac-installer/charts/osac-prereqs/templates/hooks/{{ item }}"
+      regexp: 'backoffLimit: 5'
+      replace: 'backoffLimit: 30'
+    loop:
+    - configure-cnv.yaml
+    - configure-mce.yaml
+    - configure-metallb.yaml
+
   - name: Ensure values directory exists
     ansible.builtin.file:
       path: "~{{ ansible_user }}/osac-installer/values/demo"
