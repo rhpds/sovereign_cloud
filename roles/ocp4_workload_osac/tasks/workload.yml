@@ -20,6 +20,30 @@
   - r_adopt_ns is failed
   - "'not found' not in (r_adopt_ns.msg | default(''))"
 
+- name: Check for existing OSAC namespaces
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Namespace
+    name: "{{ item }}"
+  loop:
+  - osac-prereqs
+  - "{{ ocp4_workload_osac_namespace }}"
+  register: r_osac_namespaces
+
+- name: Delete leftover Helm hook jobs from previous runs
+  kubernetes.core.k8s:
+    state: absent
+    api_version: batch/v1
+    kind: Job
+    namespace: "{{ item.item }}"
+    label_selectors:
+    - app.kubernetes.io/managed-by=Helm
+  loop: "{{ r_osac_namespaces.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+  when: item.resources | length > 0
+  failed_when: false
+
 - name: Set Helm download URL
   ansible.builtin.set_fact:
     _ocp4_workload_osac_helm_url: >-
@@ -98,30 +122,6 @@
       content: "{{ ocp4_workload_osac_aap_license }}"
       dest: "~{{ ansible_user }}/osac-installer/values/demo/license.zip"
       mode: ug=rw,go=r
-
-  - name: Check for existing OSAC namespaces
-    kubernetes.core.k8s_info:
-      api_version: v1
-      kind: Namespace
-      name: "{{ item }}"
-    loop:
-    - osac-prereqs
-    - "{{ ocp4_workload_osac_namespace }}"
-    register: r_osac_namespaces
-
-  - name: Delete leftover Helm hook jobs from previous runs
-    kubernetes.core.k8s:
-      state: absent
-      api_version: batch/v1
-      kind: Job
-      namespace: "{{ item.item }}"
-      label_selectors:
-      - app.kubernetes.io/managed-by=Helm
-    loop: "{{ r_osac_namespaces.results }}"
-    loop_control:
-      label: "{{ item.item }}"
-    when: item.resources | length > 0
-    failed_when: false
 
   - name: Run OSAC installer
     ansible.builtin.shell:
