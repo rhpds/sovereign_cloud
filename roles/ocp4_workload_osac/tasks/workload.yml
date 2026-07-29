@@ -123,18 +123,67 @@
       dest: "~{{ ansible_user }}/osac-installer/values/demo/license.zip"
       mode: ug=rw,go=r
 
-  - name: Run OSAC installer
+  - name: "OSAC Phase 1: Install operators"
     ansible.builtin.shell:
       cmd: >-
         set -o pipefail;
-        make install
+        make install-operators
         VALUES_FILE=values/demo/values.yaml
         INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
-        2>&1 | tee ~{{ ansible_user }}/.osac_install.log
+        2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
       chdir: "~{{ ansible_user }}/osac-installer"
     changed_when: true
-    async: 7200
+    async: 3600
     poll: 30
+
+- name: Wait for CNV and MCE operators to be ready
+  kubernetes.core.k8s_info:
+    api_version: operators.coreos.com/v1alpha1
+    kind: ClusterServiceVersion
+    namespace: "{{ item.namespace }}"
+    label_selectors:
+    - "operators.coreos.com/{{ item.operator }}"
+  loop:
+  - operator: kubevirt-hyperconverged-operator.openshift-cnv
+    namespace: openshift-cnv
+  - operator: multicluster-engine.multicluster-engine
+    namespace: multicluster-engine
+  loop_control:
+    label: "{{ item.operator }}"
+  register: r_csv_wait
+  until:
+  - r_csv_wait.resources | length > 0
+  - r_csv_wait.resources[0].status.phase | default('') == 'Succeeded'
+  retries: 60
+  delay: 30
+
+- name: "OSAC Phase 2: Install prerequisites"
+  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      make install-prereqs
+      VALUES_FILE=values/demo/values.yaml
+      INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
+      2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
+    chdir: "~{{ ansible_user }}/osac-installer"
+  changed_when: true
+  async: 3600
+  poll: 30
+
+- name: "OSAC Phase 3: Install OSAC"
+  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      make install-osac
+      VALUES_FILE=values/demo/values.yaml
+      INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
+      2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
+    chdir: "~{{ ansible_user }}/osac-installer"
+  changed_when: true
+  async: 3600
+  poll: 30
 
 - name: Patch tenant shared storage class status
   ansible.builtin.command:
