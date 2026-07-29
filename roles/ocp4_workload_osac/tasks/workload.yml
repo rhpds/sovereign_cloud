@@ -102,6 +102,7 @@
   - name: Run OSAC installer
     ansible.builtin.shell:
       cmd: >-
+        set -o pipefail;
         make install
         VALUES_FILE=values/demo/values.yaml
         INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
@@ -112,18 +113,14 @@
     poll: 30
 
 - name: Patch tenant shared storage class status
-  kubernetes.core.k8s:
-    state: patched
-    api_version: osac.openshift.io/v1alpha1
-    kind: Tenant
-    name: shared
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-    subresource: status
-    definition:
-      status:
-        storageClasses:
-        - name: "{{ ocp4_workload_osac_storage_class }}"
-          tier: default
+  ansible.builtin.command:
+    cmd: >-
+      oc patch tenant shared
+      -n {{ ocp4_workload_osac_namespace }}
+      --type=merge
+      --subresource=status
+      -p '{"status":{"storageClasses":[{"name":"{{ ocp4_workload_osac_storage_class }}","tier":"default"}]}}'
+  changed_when: true
 
 - name: Label storage class for OSAC tenant
   kubernetes.core.k8s:
