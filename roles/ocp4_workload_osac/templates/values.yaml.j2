@@ -153,6 +153,20 @@ aap:
 validation:
   enabled: true
 
+# Required on demo labs unless an external Postgres + fulfillment-db secret exist
+bundledPostgres:
+  enabled: true
+  database:
+    name: service
+    user: service
+
+hubAccess:
+  enabled: true
+
+# BMaaS off unless Ironic/inventory secrets are provisioned (blocks Helm --wait otherwise)
+bmf:
+  enabled: false
+
 clusterVersions:
   enabled: true
   versions:
