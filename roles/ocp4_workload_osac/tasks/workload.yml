@@ -40,6 +40,7 @@
   register: r_osac_namespaces
 
 - name: Delete leftover Helm hook jobs from previous runs
+  when: item.resources | length > 0
   kubernetes.core.k8s:
     state: absent
     api_version: batch/v1
@@ -50,7 +51,6 @@
   loop: "{{ r_osac_namespaces.results }}"
   loop_control:
     label: "{{ item.item }}"
-  when: item.resources | length > 0
   failed_when: false
 
 - name: Set Helm download URL
@@ -165,6 +165,28 @@
   - r_csv_wait.resources[0].status.phase | default('') == 'Succeeded'
   retries: 60
   delay: 30
+
+- name: Wait for HyperConverged CR to be Available
+  kubernetes.core.k8s_info:
+    api_version: hco.kubevirt.io/v1beta1
+    kind: HyperConverged
+    name: kubevirt-hyperconverged
+    namespace: openshift-cnv
+    wait: true
+    wait_timeout: 900
+    wait_condition:
+      type: Available
+      status: "True"
+
+- name: Rollback failed osac-prereqs Helm release
+  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
+  ansible.builtin.shell:
+    cmd: >-
+      if helm status osac-prereqs -n osac-prereqs 2>/dev/null | grep -q 'STATUS: failed'; then
+        helm rollback osac-prereqs 0 -n osac-prereqs;
+      fi
+    chdir: "~{{ ansible_user }}/osac-installer"
+  changed_when: true
 
 - name: "OSAC Phase 2: Install prerequisites"
   delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
