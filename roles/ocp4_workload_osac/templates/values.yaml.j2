@@ -62,7 +62,7 @@ service:
     caBundle:
       configMap: ca-bundle
   auth:
-    issuerUrl: https://keycloak.keycloak.svc.cluster.local/realms/osac
+    issuerUrl: https://keycloak-keycloak.{{ openshift_cluster_ingress_domain }}/realms/osac
     emergencyServiceAccounts:
     - admin
     - osac-operator
@@ -78,7 +78,7 @@ service:
           param: client-secret
   idp:
     provider: keycloak
-    url: https://keycloak.keycloak.svc.cluster.local
+    url: https://keycloak-keycloak.{{ openshift_cluster_ingress_domain }}
     credentials:
     - secret:
         name: fulfillment-controller-credentials
