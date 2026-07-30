@@ -418,6 +418,18 @@
           "${KC_URL}/admin/realms/osac/clients" -d @-
         echo "created osac-ui client"
       fi
+      SCOPES=$(curl -sk -H "Authorization: Bearer $TOKEN" \
+        "${KC_URL}/admin/realms/osac/client-scopes")
+      [ -z "$CLIENT_UUID" ] && CLIENT_UUID=$(curl -sk -H "Authorization: Bearer $TOKEN" \
+        "${KC_URL}/admin/realms/osac/clients?clientId=osac-ui" \
+        | python3 -c 'import sys,json; print(json.load(sys.stdin)[0]["id"])')
+      for SCOPE_NAME in profile email web-origins; do
+        SCOPE_ID=$(echo "$SCOPES" | python3 -c "import sys,json; [print(s['id']) for s in json.load(sys.stdin) if s['name']=='${SCOPE_NAME}']")
+        if [ -n "$SCOPE_ID" ]; then
+          curl -sk -X PUT -H "Authorization: Bearer $TOKEN" \
+            "${KC_URL}/admin/realms/osac/clients/${CLIENT_UUID}/default-client-scopes/${SCOPE_ID}"
+        fi
+      done
   changed_when: true
 
 - name: Restart OSAC UI and fulfillment controller
