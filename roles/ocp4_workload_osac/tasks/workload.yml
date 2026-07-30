@@ -214,6 +214,35 @@
   async: 3600
   poll: 30
 
+- name: Create hub-access ClusterRole and ClusterRoleBinding
+  kubernetes.core.k8s:
+    state: present
+    template: "{{ item }}"
+  loop:
+  - clusterrole-hub-access.yaml.j2
+  - clusterrolebinding-hub-access.yaml.j2
+
+- name: Restart fulfillment controller to trigger tenant sync
+  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
+  ansible.builtin.command:
+    cmd: >-
+      oc rollout restart deploy/fulfillment-controller
+      -n {{ ocp4_workload_osac_namespace }}
+  changed_when: true
+
+- name: Wait for tenant shared to be created
+  kubernetes.core.k8s_info:
+    api_version: osac.openshift.io/v1alpha1
+    kind: Tenant
+    name: shared
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+  register: r_tenant_wait
+  until:
+  - r_tenant_wait.resources | length > 0
+  - r_tenant_wait.resources[0].status.phase | default('') == 'Ready'
+  retries: 30
+  delay: 10
+
 - name: Patch tenant shared storage class status
   delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
   ansible.builtin.command:
