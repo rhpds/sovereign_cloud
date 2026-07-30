@@ -1,5 +1,5 @@
 ---
-- name: Remove pre-existing cert-manager OperatorGroup to avoid conflict with Helm
+- name: Remove pre-existing cert-manager OperatorGroup to avoid conflict with Helm deploy
   kubernetes.core.k8s:
     state: absent
     api_version: operators.coreos.com/v1
@@ -28,30 +28,6 @@
   failed_when:
   - r_adopt_ns is failed
   - "'not found' not in (r_adopt_ns.msg | default(''))"
-
-- name: Check for existing OSAC namespaces
-  kubernetes.core.k8s_info:
-    api_version: v1
-    kind: Namespace
-    name: "{{ item }}"
-  loop:
-  - osac-prereqs
-  - "{{ ocp4_workload_osac_namespace }}"
-  register: r_osac_namespaces
-
-- name: Delete leftover Helm hook jobs from previous runs
-  when: item.resources | length > 0
-  kubernetes.core.k8s:
-    state: absent
-    api_version: batch/v1
-    kind: Job
-    namespace: "{{ item.item }}"
-    label_selectors:
-    - app.kubernetes.io/managed-by=Helm
-  loop: "{{ r_osac_namespaces.results }}"
-  loop_control:
-    label: "{{ item.item }}"
-  failed_when: false
 
 - name: Set Helm download URL
   ansible.builtin.set_fact:
@@ -176,16 +152,6 @@
   retries: 60
   delay: 30
 
-- name: Rollback failed osac-prereqs Helm release
-  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
-  ansible.builtin.shell:
-    cmd: >-
-      if helm status osac-prereqs -n osac-prereqs 2>/dev/null | grep -q 'STATUS: failed'; then
-        helm rollback osac-prereqs 0 -n osac-prereqs;
-      fi
-    chdir: "~{{ ansible_user }}/osac-installer"
-  changed_when: true
-
 - name: "OSAC Phase 2: Install prerequisites"
   delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
   ansible.builtin.shell:
@@ -222,7 +188,7 @@
   - clusterrole-hub-access.yaml.j2
   - clusterrolebinding-hub-access.yaml.j2
 
-- name: Restart fulfillment controller to trigger tenant sync
+- name: Restart fulfillment controller to trigger Tenant sync
   delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
   ansible.builtin.command:
     cmd: >-
@@ -230,7 +196,7 @@
       -n {{ ocp4_workload_osac_namespace }}
   changed_when: true
 
-- name: Wait for tenant shared to be created
+- name: Wait for Tenant 'shared' to be created
   kubernetes.core.k8s_info:
     api_version: osac.openshift.io/v1alpha1
     kind: Tenant
@@ -243,7 +209,7 @@
   retries: 30
   delay: 10
 
-- name: Patch tenant shared storage class status
+- name: Patch Tenant 'shared' storage class status
   delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
   ansible.builtin.command:
     cmd: >-
@@ -254,7 +220,7 @@
       -p '{"status":{"storageClasses":[{"name":"{{ ocp4_workload_osac_storage_class }}","tier":"default"}]}}'
   changed_when: true
 
-- name: Label storage class for OSAC tenant
+- name: Label storage class for OSAC Tenant
   kubernetes.core.k8s:
     state: patched
     api_version: storage.k8s.io/v1
@@ -269,7 +235,6 @@
 # --------------------------------------------------
 # Keycloak public URL configuration (required for browser login)
 # --------------------------------------------------
-
 - name: Set Keycloak hostname facts
   ansible.builtin.set_fact:
     _ocp4_workload_osac_kc_host: "keycloak-keycloak.{{ openshift_cluster_ingress_domain }}"
@@ -331,7 +296,7 @@
     cmd: oc rollout status deploy/keycloak-service -n keycloak --timeout=180s
   changed_when: false
 
-- name: Convert Keycloak route from passthrough to reencrypt
+- name: Convert Keycloak Route from passthrough to reencrypt
   delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
   ansible.builtin.shell:
     cmd: |
@@ -454,7 +419,6 @@
 # --------------------------------------------------
 # OSAC AAP token (required for operator to reach AAP)
 # --------------------------------------------------
-
 - name: Wait for AAP token creation job to complete
   delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
   ansible.builtin.command:
