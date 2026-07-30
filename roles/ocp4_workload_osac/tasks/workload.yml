@@ -366,7 +366,7 @@
   delay: 10
   changed_when: false
 
-- name: Ensure osac-ui Keycloak client exists
+- name: Configure osac-ui Keycloak client redirect URIs
   delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
   ansible.builtin.shell:
     cmd: |
@@ -386,25 +386,36 @@
       fi
       EXISTING=$(curl -sk -H "Authorization: Bearer $TOKEN" \
         "${KC_URL}/admin/realms/osac/clients?clientId=osac-ui")
-      if echo "$EXISTING" | python3 -c 'import sys,json; d=json.load(sys.stdin); raise SystemExit(0 if d else 1)'; then
-        echo "osac-ui client already present"
+      CLIENT_UUID=$(echo "$EXISTING" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d[0]["id"] if d else "")' 2>/dev/null)
+      if [ -n "$CLIENT_UUID" ]; then
+        CURRENT=$(curl -sk -H "Authorization: Bearer $TOKEN" \
+          "${KC_URL}/admin/realms/osac/clients/${CLIENT_UUID}")
+        MERGED=$(echo "$CURRENT" | python3 -c "
+      import sys, json
+      c = json.load(sys.stdin)
+      c['rootUrl'] = '${UI_URL}'
+      c['redirectUris'] = ['${UI_URL}/callback', '${UI_URL}/*']
+      c['webOrigins'] = ['${UI_URL}', '+']
+      c.setdefault('attributes', {})['pkce.code.challenge.method'] = 'S256'
+      json.dump(c, sys.stdout)")
+        echo "$MERGED" | curl -sk -X PUT -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/json" \
+          "${KC_URL}/admin/realms/osac/clients/${CLIENT_UUID}" -d @-
+        echo "updated osac-ui client"
       else
-        curl -sk -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-          "${KC_URL}/admin/realms/osac/clients" \
-          -d "$(python3 -c "
+        python3 -c "
       import json
       print(json.dumps({
-        'clientId': 'osac-ui',
-        'enabled': True,
-        'publicClient': True,
-        'standardFlowEnabled': True,
-        'directAccessGrantsEnabled': False,
+        'clientId': 'osac-ui', 'enabled': True, 'publicClient': True,
+        'standardFlowEnabled': True, 'directAccessGrantsEnabled': False,
         'attributes': {'pkce.code.challenge.method': 'S256'},
         'rootUrl': '${UI_URL}',
         'redirectUris': ['${UI_URL}/callback', '${UI_URL}/*'],
         'webOrigins': ['${UI_URL}', '+'],
-        'protocol': 'openid-connect'
-      }))")"
+        'protocol': 'openid-connect',
+      }))" | curl -sk -X POST -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/json" \
+          "${KC_URL}/admin/realms/osac/clients" -d @-
         echo "created osac-ui client"
       fi
   changed_when: true
