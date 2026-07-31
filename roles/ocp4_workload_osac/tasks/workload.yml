@@ -284,7 +284,17 @@
       status: "True"
     wait_timeout: 180
 
+- name: Read Keycloak deployment
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: keycloak-service
+    namespace: keycloak
+  register: r_kc_deploy
+
 - name: Set Keycloak public hostname environment
+  vars:
+    _kc_container: "{{ r_kc_deploy.resources[0].spec.template.spec.containers[0] }}"
   kubernetes.core.k8s:
     state: patched
     api_version: apps/v1
@@ -296,8 +306,8 @@
         template:
           spec:
             containers:
-            # ponytail: container name assumed keycloak-service, verify on target cluster
-            - name: keycloak-service
+            - name: "{{ _kc_container.name }}"
+              image: "{{ _kc_container.image }}"
               env:
               - name: KC_HOSTNAME
                 value: "{{ _ocp4_workload_osac_kc_host }}"
@@ -464,7 +474,17 @@
       status: "True"
     wait_timeout: 600
 
+- name: Read osac-operator deployment
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: osac-operator
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+  register: r_osac_operator_deploy
+
 - name: Patch OSAC_AAP_TOKEN onto osac-operator deployment
+  vars:
+    _osac_container: "{{ r_osac_operator_deploy.resources[0].spec.template.spec.containers[0] }}"
   kubernetes.core.k8s:
     state: patched
     api_version: apps/v1
@@ -476,8 +496,8 @@
         template:
           spec:
             containers:
-            # ponytail: container name assumed osac-operator, verify on target cluster
-            - name: osac-operator
+            - name: "{{ _osac_container.name }}"
+              image: "{{ _osac_container.image }}"
               env:
               - name: OSAC_AAP_TOKEN
                 valueFrom:
