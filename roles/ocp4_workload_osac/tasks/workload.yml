@@ -189,12 +189,18 @@
   - clusterrolebinding-hub-access.yaml.j2
 
 - name: Restart fulfillment controller to trigger Tenant sync
-  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
-  ansible.builtin.command:
-    cmd: >-
-      oc rollout restart deploy/fulfillment-controller
-      -n {{ ocp4_workload_osac_namespace }}
-  changed_when: true
+  kubernetes.core.k8s:
+    state: patched
+    api_version: apps/v1
+    kind: Deployment
+    name: fulfillment-controller
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    definition:
+      spec:
+        template:
+          metadata:
+            annotations:
+              kubectl.kubernetes.io/restartedAt: "{{ now(utc=true).isoformat() }}"
 
 - name: Wait for Tenant 'shared' to be created
   kubernetes.core.k8s_info:
@@ -232,9 +238,9 @@
           osac.openshift.io/tenant: Default
           osac.openshift.io/storage-tier: default
 
-# --------------------------------------------------
+# --------------------------------------------------------------
 # Keycloak public URL configuration (required for browser login)
-# --------------------------------------------------
+# --------------------------------------------------------------
 - name: Set Keycloak hostname facts
   ansible.builtin.set_fact:
     _ocp4_workload_osac_kc_host: "keycloak-keycloak.{{ openshift_cluster_ingress_domain }}"
@@ -242,29 +248,30 @@
     _ocp4_workload_osac_ui_url: >-
       https://osac-ui-{{ ocp4_workload_osac_namespace }}.{{ openshift_cluster_ingress_domain }}
 
+- name: Read Keycloak TLS certificate
+  kubernetes.core.k8s_info:
+    api_version: cert-manager.io/v1
+    kind: Certificate
+    name: keycloak-tls
+    namespace: keycloak
+  register: r_kc_cert
+
 - name: Add public hostname to Keycloak TLS certificate SAN
-  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
-  ansible.builtin.shell:
-    cmd: |
-      set -euo pipefail
-      KC_HOST="{{ _ocp4_workload_osac_kc_host }}"
-      CERT_JSON=$(oc get certificate keycloak-tls -n keycloak -o json)
-      if echo "$CERT_JSON" | python3 -c "import sys,json; dns=json.load(sys.stdin)['spec'].get('dnsNames',[]); raise SystemExit(0 if '$KC_HOST' in dns else 1)"; then
-        echo "SAN already present"
-      else
-        echo "$CERT_JSON" | python3 -c "
-      import sys, json
-      c = json.load(sys.stdin)
-      dns = c['spec'].setdefault('dnsNames', [])
-      dns.append('$KC_HOST')
-      c['spec']['dnsNames'] = list(set(dns))
-      c['metadata'].pop('managedFields', None)
-      c['metadata'].pop('resourceVersion', None)
-      json.dump(c, sys.stdout)" | oc apply -f -
-        oc annotate certificate keycloak-tls -n keycloak \
-          cert-manager.io/force-renewal="$(date +%s)" --overwrite
-      fi
-  changed_when: true
+  when: _ocp4_workload_osac_kc_host not in (r_kc_cert.resources[0].spec.dnsNames | default([]))
+  kubernetes.core.k8s:
+    state: patched
+    api_version: cert-manager.io/v1
+    kind: Certificate
+    name: keycloak-tls
+    namespace: keycloak
+    definition:
+      metadata:
+        annotations:
+          cert-manager.io/force-renewal: "{{ now(utc=true).isoformat() }}"
+      spec:
+        dnsNames: >-
+          {{ (r_kc_cert.resources[0].spec.dnsNames | default([]))
+             | union([_ocp4_workload_osac_kc_host]) | list }}
 
 - name: Wait for Keycloak TLS certificate to be ready
   kubernetes.core.k8s_info:
@@ -278,58 +285,76 @@
     wait_timeout: 180
 
 - name: Set Keycloak public hostname environment
-  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
-  ansible.builtin.command:
-    cmd: >-
-      oc set env deploy/keycloak-service -n keycloak
-      KC_HOSTNAME={{ _ocp4_workload_osac_kc_host }}
-      KC_HOSTNAME_URL={{ _ocp4_workload_osac_kc_url }}
-      KC_HOSTNAME_ADMIN_URL={{ _ocp4_workload_osac_kc_url }}
-      KC_HOSTNAME_STRICT=false
-      KC_HOSTNAME_STRICT_HTTPS=false
-      KC_PROXY_HEADERS=xforwarded
-  changed_when: true
+  kubernetes.core.k8s:
+    state: patched
+    api_version: apps/v1
+    kind: Deployment
+    name: keycloak-service
+    namespace: keycloak
+    definition:
+      spec:
+        template:
+          spec:
+            containers:
+            # ponytail: container name assumed keycloak-service, verify on target cluster
+            - name: keycloak-service
+              env:
+              - name: KC_HOSTNAME
+                value: "{{ _ocp4_workload_osac_kc_host }}"
+              - name: KC_HOSTNAME_URL
+                value: "{{ _ocp4_workload_osac_kc_url }}"
+              - name: KC_HOSTNAME_ADMIN_URL
+                value: "{{ _ocp4_workload_osac_kc_url }}"
+              - name: KC_HOSTNAME_STRICT
+                value: "false"
+              - name: KC_HOSTNAME_STRICT_HTTPS
+                value: "false"
+              - name: KC_PROXY_HEADERS
+                value: xforwarded
 
 - name: Wait for Keycloak rollout
-  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
-  ansible.builtin.command:
-    cmd: oc rollout status deploy/keycloak-service -n keycloak --timeout=180s
-  changed_when: false
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: keycloak-service
+    namespace: keycloak
+    wait_condition:
+      type: Available
+      status: "True"
+    wait_timeout: 180
+
+- name: Read Keycloak CA certificate from secret
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Secret
+    name: keycloak-tls-cert
+    namespace: keycloak
+  register: r_kc_tls_secret
 
 - name: Convert Keycloak Route from passthrough to reencrypt
-  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
-  ansible.builtin.shell:
-    cmd: |
-      set -euo pipefail
-      TERM=$(oc get route keycloak -n keycloak -o jsonpath='{.spec.tls.termination}')
-      if [ "$TERM" = "reencrypt" ]; then
-        echo "Route already reencrypt"
-        exit 0
-      fi
-      CA_PEM=$(oc get secret keycloak-tls-cert -n keycloak -o jsonpath='{.data.ca\.crt}' | base64 -d)
-      oc get route keycloak -n keycloak -o json | python3 -c "
-      import sys, json
-      route = json.load(sys.stdin)
-      tls = route['spec'].setdefault('tls', {})
-      tls['termination'] = 'reencrypt'
-      tls['insecureEdgeTerminationPolicy'] = 'Redirect'
-      tls['destinationCACertificate'] = '''$CA_PEM'''
-      route['metadata'].pop('managedFields', None)
-      route['metadata'].pop('resourceVersion', None)
-      json.dump(route, sys.stdout)" | oc apply -f -
-  changed_when: true
+  kubernetes.core.k8s:
+    state: patched
+    api_version: route.openshift.io/v1
+    kind: Route
+    name: keycloak
+    namespace: keycloak
+    definition:
+      spec:
+        tls:
+          termination: reencrypt
+          insecureEdgeTerminationPolicy: Redirect
+          destinationCACertificate: "{{ r_kc_tls_secret.resources[0].data['ca.crt'] | b64decode }}"
 
 - name: Wait for Keycloak to be reachable after route change
-  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
-  ansible.builtin.command:
-    cmd: >-
-      curl -sk -o /dev/null -w '%{http_code}'
-      {{ _ocp4_workload_osac_kc_url }}/realms/osac/
+  ansible.builtin.uri:
+    url: "{{ _ocp4_workload_osac_kc_url }}/realms/osac/"
+    method: GET
+    validate_certs: false
+    status_code: 200
   register: r_kc_check
-  until: r_kc_check.stdout == '200'
+  until: r_kc_check.status | default(0) == 200
   retries: 30
   delay: 10
-  changed_when: false
 
 - name: Configure osac-ui Keycloak client redirect URIs
   delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
@@ -398,43 +423,64 @@
   changed_when: true
 
 - name: Restart OSAC UI and fulfillment controller
-  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
-  ansible.builtin.command:
-    cmd: >-
-      oc rollout restart
-      deploy/osac-ui
-      deploy/fulfillment-controller
-      -n {{ ocp4_workload_osac_namespace }}
-  changed_when: true
+  kubernetes.core.k8s:
+    state: patched
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ item }}"
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    definition:
+      spec:
+        template:
+          metadata:
+            annotations:
+              kubectl.kubernetes.io/restartedAt: "{{ now(utc=true).isoformat() }}"
+  loop:
+  - osac-ui
+  - fulfillment-controller
 
 - name: Wait for OSAC UI rollout
-  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
-  ansible.builtin.command:
-    cmd: >-
-      oc rollout status deploy/osac-ui
-      -n {{ ocp4_workload_osac_namespace }}
-      --timeout=180s
-  changed_when: false
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: osac-ui
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    wait_condition:
+      type: Available
+      status: "True"
+    wait_timeout: 180
 
 # --------------------------------------------------
 # OSAC AAP token (required for operator to reach AAP)
 # --------------------------------------------------
 - name: Wait for AAP token creation job to complete
-  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
-  ansible.builtin.command:
-    cmd: >-
-      oc wait --for=condition=Complete
-      job/osac-aap-create-token
-      -n {{ ocp4_workload_osac_namespace }}
-      --timeout=600s
-  changed_when: false
+  kubernetes.core.k8s_info:
+    api_version: batch/v1
+    kind: Job
+    name: osac-aap-create-token
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    wait_condition:
+      type: Complete
+      status: "True"
+    wait_timeout: 600
 
 - name: Patch OSAC_AAP_TOKEN onto osac-operator deployment
-  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
-  ansible.builtin.command:
-    cmd: >-
-      oc patch deployment/osac-operator
-      -n {{ ocp4_workload_osac_namespace }}
-      --type=json
-      -p='[{"op":"add","path":"/spec/template/spec/containers/0/env/-","value":{"name":"OSAC_AAP_TOKEN","valueFrom":{"secretKeyRef":{"name":"osac-aap-api-token","key":"token"}}}}]'
-  changed_when: true
+  kubernetes.core.k8s:
+    state: patched
+    api_version: apps/v1
+    kind: Deployment
+    name: osac-operator
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    definition:
+      spec:
+        template:
+          spec:
+            containers:
+            # ponytail: container name assumed osac-operator, verify on target cluster
+            - name: osac-operator
+              env:
+              - name: OSAC_AAP_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: osac-aap-api-token
+                    key: token
