@@ -1,135 +1,23 @@
 ---
-- name: Remove pre-existing cert-manager OperatorGroup to avoid conflict with Helm deploy
-  kubernetes.core.k8s:
-    state: absent
-    api_version: operators.coreos.com/v1
-    kind: OperatorGroup
-    name: cert-manager-operator-og
-    namespace: cert-manager-operator
-  failed_when: false
+- name: Generate passwords if not provided
+  ansible.builtin.include_tasks: setup_passwords.yml
 
-- name: Adopt pre-existing cert-manager namespaces for Helm
-  kubernetes.core.k8s:
-    state: patched
-    api_version: v1
-    kind: Namespace
-    name: "{{ item }}"
-    definition:
-      metadata:
-        labels:
-          app.kubernetes.io/managed-by: Helm
-        annotations:
-          meta.helm.sh/release-name: osac-operators
-          meta.helm.sh/release-namespace: osac-operators
-  loop:
-  - cert-manager-operator
-  - cert-manager
-  register: r_adopt_ns
-  failed_when:
-  - r_adopt_ns is failed
-  - "'not found' not in (r_adopt_ns.msg | default(''))"
+- name: Call pre_install_tasks.yml
+  ansible.builtin.include_tasks: pre_install_tasks.yml
 
-- name: Set Helm download URL
-  ansible.builtin.set_fact:
-    _ocp4_workload_osac_helm_url: >-
-      {{ '{0}/helm/latest/helm-linux-amd64.tar.gz'.format(ocp4_workload_osac_helm_mirror) }}
-
-- name: Run on Bastion
+- name: "OSAC Phase 1: Install operators"
   delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
-  block:
-  - name: Root operations
-    become: true
-    block:
-    - name: Install make
-      ansible.builtin.package:
-        name: make
-        state: present
-
-    - name: Install Helm
-      ansible.builtin.unarchive:
-        src: "{{ _ocp4_workload_osac_helm_url }}"
-        remote_src: true
-        dest: /usr/bin
-        mode: ug=rwx,go=rx
-        owner: root
-        group: root
-      retries: 10
-      register: r_helm_install
-      until: r_helm_install is success
-      delay: 30
-
-    - name: Rename helm binary
-      ansible.builtin.copy:
-        src: /usr/bin/helm-linux-amd64
-        dest: /usr/bin/helm
-        remote_src: true
-        mode: ug=rwx,go=rx
-        owner: root
-        group: root
-
-    - name: Remove original helm binary
-      ansible.builtin.file:
-        path: /usr/bin/helm-linux-amd64
-        state: absent
-
-  - name: Ensure osac directory does not exist
-    ansible.builtin.file:
-      path: "~{{ ansible_user }}/osac"
-      state: absent
-
-  - name: Clone osac and initialize submodules
-    ansible.builtin.git:
-      repo: "{{ ocp4_workload_osac_repo }}"
-      dest: "~{{ ansible_user }}/osac"
-      recursive: true
-      version: "{{ ocp4_workload_osac_repo_version }}"
-
-  - name: Patch Makefile to add --take-ownership to helm upgrade calls
-    ansible.builtin.replace:
-      path: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/Makefile"
-      regexp: '--timeout'
-      replace: '--take-ownership --timeout'
-
-  - name: Increase backoffLimit on prereqs hook jobs
-    ansible.builtin.replace:
-      path: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-prereqs/templates/hooks/{{ item }}"
-      regexp: 'backoffLimit: 5'
-      replace: 'backoffLimit: 30'
-    loop:
-    - configure-cnv.yaml
-    - configure-mce.yaml
-    - configure-metallb.yaml
-
-  - name: Ensure values directory exists
-    ansible.builtin.file:
-      path: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/demo"
-      state: directory
-      mode: ug=rwx,go=rx
-
-  - name: Write OSAC values file
-    ansible.builtin.template:
-      src: values.yaml.j2
-      dest: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/demo/values.yaml"
-      mode: ug=rw,go=r
-
-  - name: Write AAP license file
-    ansible.builtin.copy:
-      content: "{{ ocp4_workload_osac_aap_license }}"
-      dest: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/demo/license.zip"
-      mode: ug=rw,go=r
-
-  - name: "OSAC Phase 1: Install operators"
-    ansible.builtin.shell:
-      cmd: >-
-        set -o pipefail;
-        make install-operators
-        VALUES_FILE=values/demo/values.yaml
-        INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
-        2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
-      chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
-    changed_when: true
-    async: 3600
-    poll: 30
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      make install-operators
+      VALUES_FILE=values/demo/values.yaml
+      INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
+      2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
+    chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
+  changed_when: true
+  async: 3600
+  poll: 30
 
 - name: Wait for CNV and MCE operators to be ready
   kubernetes.core.k8s_info:
@@ -180,327 +68,29 @@
   async: 3600
   poll: 30
 
-- name: Create hub-access ClusterRole and ClusterRoleBinding
-  kubernetes.core.k8s:
-    state: present
-    template: "{{ item }}"
-  loop:
-  - clusterrole-hub-access.yaml.j2
-  - clusterrolebinding-hub-access.yaml.j2
+- name: Call post_install_fixes.yml
+  ansible.builtin.include_tasks: post_install_fixes.yml
 
-- name: Restart fulfillment controller to trigger Tenant sync
-  kubernetes.core.k8s:
-    state: patched
-    api_version: apps/v1
-    kind: Deployment
-    name: fulfillment-controller
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-    definition:
-      spec:
-        template:
-          metadata:
-            annotations:
-              kubectl.kubernetes.io/restartedAt: "{{ now(utc=true).isoformat() }}"
-
-- name: Wait for Tenant 'shared' to be created
+# Get data for AgnosticV
+- name: Get OSAC UI Route URL
   kubernetes.core.k8s_info:
-    api_version: osac.openshift.io/v1alpha1
-    kind: Tenant
-    name: shared
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-  register: r_tenant_wait
-  until:
-  - r_tenant_wait.resources | length > 0
-  - r_tenant_wait.resources[0].status.phase | default('') == 'Ready'
-  retries: 30
-  delay: 10
-
-- name: Patch Tenant 'shared' storage class status
-  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
-  ansible.builtin.command:
-    cmd: >-
-      oc patch tenant shared
-      -n {{ ocp4_workload_osac_namespace }}
-      --type=merge
-      --subresource=status
-      -p '{"status":{"storageClasses":[{"name":"{{ ocp4_workload_osac_storage_class }}","tier":"default"}]}}'
-  changed_when: true
-
-- name: Label storage class for OSAC Tenant
-  kubernetes.core.k8s:
-    state: patched
-    api_version: storage.k8s.io/v1
-    kind: StorageClass
-    name: "{{ ocp4_workload_osac_storage_class }}"
-    definition:
-      metadata:
-        labels:
-          osac.openshift.io/tenant: Default
-          osac.openshift.io/storage-tier: default
-
-# --------------------------------------------------------------
-# Keycloak public URL configuration (required for browser login)
-# --------------------------------------------------------------
-- name: Set Keycloak hostname facts
-  ansible.builtin.set_fact:
-    _ocp4_workload_osac_kc_host: "keycloak-keycloak.{{ openshift_cluster_ingress_domain }}"
-    _ocp4_workload_osac_kc_url: "https://keycloak-keycloak.{{ openshift_cluster_ingress_domain }}"
-    _ocp4_workload_osac_ui_url: >-
-      https://osac-ui-{{ ocp4_workload_osac_namespace }}.{{ openshift_cluster_ingress_domain }}
-
-- name: Read Keycloak TLS certificate
-  kubernetes.core.k8s_info:
-    api_version: cert-manager.io/v1
-    kind: Certificate
-    name: keycloak-tls
-    namespace: keycloak
-  register: r_kc_cert
-
-- name: Add public hostname to Keycloak TLS certificate SAN
-  when: _ocp4_workload_osac_kc_host not in (r_kc_cert.resources[0].spec.dnsNames | default([]))
-  kubernetes.core.k8s:
-    state: patched
-    api_version: cert-manager.io/v1
-    kind: Certificate
-    name: keycloak-tls
-    namespace: keycloak
-    definition:
-      metadata:
-        annotations:
-          cert-manager.io/force-renewal: "{{ now(utc=true).isoformat() }}"
-      spec:
-        dnsNames: >-
-          {{ (r_kc_cert.resources[0].spec.dnsNames | default([]))
-             | union([_ocp4_workload_osac_kc_host]) | list }}
-
-- name: Wait for Keycloak TLS certificate to be ready
-  kubernetes.core.k8s_info:
-    api_version: cert-manager.io/v1
-    kind: Certificate
-    name: keycloak-tls
-    namespace: keycloak
-    wait_condition:
-      type: Ready
-      status: "True"
-    wait_timeout: 180
-
-- name: Read Keycloak deployment
-  kubernetes.core.k8s_info:
-    api_version: apps/v1
-    kind: Deployment
-    name: keycloak-service
-    namespace: keycloak
-  register: r_kc_deploy
-
-- name: Set Keycloak public hostname environment
-  vars:
-    _kc_container: "{{ r_kc_deploy.resources[0].spec.template.spec.containers[0] }}"
-  kubernetes.core.k8s:
-    state: patched
-    api_version: apps/v1
-    kind: Deployment
-    name: keycloak-service
-    namespace: keycloak
-    definition:
-      spec:
-        template:
-          spec:
-            containers:
-            - name: "{{ _kc_container.name }}"
-              image: "{{ _kc_container.image }}"
-              env:
-              - name: KC_HOSTNAME
-                value: "{{ _ocp4_workload_osac_kc_host }}"
-              - name: KC_HOSTNAME_URL
-                value: "{{ _ocp4_workload_osac_kc_url }}"
-              - name: KC_HOSTNAME_ADMIN_URL
-                value: "{{ _ocp4_workload_osac_kc_url }}"
-              - name: KC_HOSTNAME_STRICT
-                value: "false"
-              - name: KC_HOSTNAME_STRICT_HTTPS
-                value: "false"
-              - name: KC_PROXY_HEADERS
-                value: xforwarded
-
-- name: Wait for Keycloak rollout
-  kubernetes.core.k8s_info:
-    api_version: apps/v1
-    kind: Deployment
-    name: keycloak-service
-    namespace: keycloak
-    wait_condition:
-      type: Available
-      status: "True"
-    wait_timeout: 180
-
-- name: Read Keycloak CA certificate from secret
-  kubernetes.core.k8s_info:
-    api_version: v1
-    kind: Secret
-    name: keycloak-tls-cert
-    namespace: keycloak
-  register: r_kc_tls_secret
-
-- name: Convert Keycloak Route from passthrough to reencrypt
-  kubernetes.core.k8s:
-    state: patched
     api_version: route.openshift.io/v1
     kind: Route
-    name: keycloak
-    namespace: keycloak
-    definition:
-      spec:
-        tls:
-          termination: reencrypt
-          insecureEdgeTerminationPolicy: Redirect
-          destinationCACertificate: "{{ r_kc_tls_secret.resources[0].data['ca.crt'] | b64decode }}"
-
-- name: Wait for Keycloak to be reachable after route change
-  ansible.builtin.uri:
-    url: "{{ _ocp4_workload_osac_kc_url }}/realms/osac/"
-    method: GET
-    validate_certs: false
-    status_code: 200
-  register: r_kc_check
-  until: r_kc_check.status | default(0) == 200
+    name: osac-ui
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+  register: r_osac_ui_route
+  until: r_osac_ui_route.resources | length > 0
   retries: 30
   delay: 10
 
-- name: Configure osac-ui Keycloak client redirect URIs
-  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
-  ansible.builtin.shell:
-    cmd: |
-      set -euo pipefail
-      KC_URL="{{ _ocp4_workload_osac_kc_url }}"
-      UI_URL="{{ _ocp4_workload_osac_ui_url }}"
-      for i in $(seq 1 5); do
-        RESP=$(curl -sk -X POST \
-          "${KC_URL}/realms/master/protocol/openid-connect/token" \
-          -d "grant_type=password&client_id=admin-cli&username=admin&password=admin")
-        TOKEN=$(echo "$RESP" | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])' 2>/dev/null) && break
-        sleep 10
-      done
-      if [ -z "${TOKEN:-}" ]; then
-        echo "Failed to get Keycloak admin token after 5 attempts" >&2
-        exit 1
-      fi
-      EXISTING=$(curl -sk -H "Authorization: Bearer $TOKEN" \
-        "${KC_URL}/admin/realms/osac/clients?clientId=osac-ui")
-      CLIENT_UUID=$(echo "$EXISTING" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d[0]["id"] if d else "")' 2>/dev/null)
-      if [ -n "$CLIENT_UUID" ]; then
-        CURRENT=$(curl -sk -H "Authorization: Bearer $TOKEN" \
-          "${KC_URL}/admin/realms/osac/clients/${CLIENT_UUID}")
-        MERGED=$(echo "$CURRENT" | python3 -c "
-      import sys, json
-      c = json.load(sys.stdin)
-      c['rootUrl'] = '${UI_URL}'
-      c['redirectUris'] = ['${UI_URL}/callback', '${UI_URL}/*']
-      c['webOrigins'] = ['${UI_URL}', '+']
-      c.setdefault('attributes', {})['pkce.code.challenge.method'] = 'S256'
-      json.dump(c, sys.stdout)")
-        echo "$MERGED" | curl -sk -X PUT -H "Authorization: Bearer $TOKEN" \
-          -H "Content-Type: application/json" \
-          "${KC_URL}/admin/realms/osac/clients/${CLIENT_UUID}" -d @-
-        echo "updated osac-ui client"
-      else
-        python3 -c "
-      import json
-      print(json.dumps({
-        'clientId': 'osac-ui', 'enabled': True, 'publicClient': True,
-        'standardFlowEnabled': True, 'directAccessGrantsEnabled': False,
-        'attributes': {'pkce.code.challenge.method': 'S256'},
-        'rootUrl': '${UI_URL}',
-        'redirectUris': ['${UI_URL}/callback', '${UI_URL}/*'],
-        'webOrigins': ['${UI_URL}', '+'],
-        'protocol': 'openid-connect',
-      }))" | curl -sk -X POST -H "Authorization: Bearer $TOKEN" \
-          -H "Content-Type: application/json" \
-          "${KC_URL}/admin/realms/osac/clients" -d @-
-        echo "created osac-ui client"
-      fi
-      SCOPES=$(curl -sk -H "Authorization: Bearer $TOKEN" \
-        "${KC_URL}/admin/realms/osac/client-scopes")
-      [ -z "$CLIENT_UUID" ] && CLIENT_UUID=$(curl -sk -H "Authorization: Bearer $TOKEN" \
-        "${KC_URL}/admin/realms/osac/clients?clientId=osac-ui" \
-        | python3 -c 'import sys,json; print(json.load(sys.stdin)[0]["id"])')
-      for SCOPE_NAME in profile email web-origins; do
-        SCOPE_ID=$(echo "$SCOPES" | python3 -c "import sys,json; [print(s['id']) for s in json.load(sys.stdin) if s['name']=='${SCOPE_NAME}']")
-        if [ -n "$SCOPE_ID" ]; then
-          curl -sk -X PUT -H "Authorization: Bearer $TOKEN" \
-            "${KC_URL}/admin/realms/osac/clients/${CLIENT_UUID}/default-client-scopes/${SCOPE_ID}"
-        fi
-      done
-  changed_when: true
+- name: Set OSAC UI URL fact
+  ansible.builtin.set_fact:
+    _ocp4_workload_osac_ui_url: "https://{{ r_osac_ui_route.resources[0].spec.host }}"
 
-- name: Restart OSAC UI and fulfillment controller
-  kubernetes.core.k8s:
-    state: patched
-    api_version: apps/v1
-    kind: Deployment
-    name: "{{ item }}"
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-    definition:
-      spec:
-        template:
-          metadata:
-            annotations:
-              kubectl.kubernetes.io/restartedAt: "{{ now(utc=true).isoformat() }}"
-  loop:
-  - osac-ui
-  - fulfillment-controller
-
-- name: Wait for OSAC UI rollout
-  kubernetes.core.k8s_info:
-    api_version: apps/v1
-    kind: Deployment
-    name: osac-ui
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-    wait_condition:
-      type: Available
-      status: "True"
-    wait_timeout: 180
-
-# --------------------------------------------------
-# OSAC AAP token (required for operator to reach AAP)
-# --------------------------------------------------
-- name: Wait for AAP token creation job to complete
-  kubernetes.core.k8s_info:
-    api_version: batch/v1
-    kind: Job
-    name: osac-aap-create-token
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-    wait_condition:
-      type: Complete
-      status: "True"
-    wait_timeout: 600
-
-- name: Read osac-operator deployment
-  kubernetes.core.k8s_info:
-    api_version: apps/v1
-    kind: Deployment
-    name: osac-operator
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-  register: r_osac_operator_deploy
-
-- name: Patch OSAC_AAP_TOKEN onto osac-operator deployment
-  vars:
-    _osac_container: "{{ r_osac_operator_deploy.resources[0].spec.template.spec.containers[0] }}"
-  kubernetes.core.k8s:
-    state: patched
-    api_version: apps/v1
-    kind: Deployment
-    name: osac-operator
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-    definition:
-      spec:
-        template:
-          spec:
-            containers:
-            - name: "{{ _osac_container.name }}"
-              image: "{{ _osac_container.image }}"
-              env:
-              - name: OSAC_AAP_TOKEN
-                valueFrom:
-                  secretKeyRef:
-                    name: osac-aap-api-token
-                    key: token
+- name: Save OSAC UI URL to user info
+  agnosticd.core.agnosticd_user_data:
+    data:
+      osac_ui_url: "{{ _ocp4_workload_osac_ui_url }}"
+      osac_admin_user: "{{ ocp4_workload_osac_admin_user }}"
+      osac_admin_password: "{{ _ocp4_workload_osac_admin_password }}"
+      osac_user_password: "{{ _ocp4_workload_osac_user_password }}"

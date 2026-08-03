@@ -15,6 +15,13 @@ ocp4_workload_osac_installer_directory: osac/osac-installer
 ocp4_workload_osac_helm_mirror: https://mirror.openshift.com/pub/openshift-v4/clients
 
 # ------------------------------------------------
+# OSAC Credentials
+# ------------------------------------------------
+ocp4_workload_osac_admin_user: admin
+ocp4_workload_osac_admin_password: ""
+ocp4_workload_osac_user_password: ""
+
+# ------------------------------------------------
 # OpenShift / RHCOS versions for MCE osImages
 # ------------------------------------------------
 ocp4_workload_osac_openshift_version: "4.22"
