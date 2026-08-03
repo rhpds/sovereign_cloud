@@ -1,0 +1,27 @@
+"@type": type.googleapis.com/osac.private.v1.ComputeInstanceCatalogItem
+metadata:
+  name: {{ ocp4_workload_osac_demo_catalog_item_name }}
+spec:
+  template: osac.templates.ocp_virt_vm
+  published: true
+  field_definitions:
+  - name: ssh_key
+    editable: true
+  - name: image.source_type
+    editable: true
+    default_value: registry
+  - name: image.source_ref
+    editable: true
+    default_value: "quay.io/containerdisks/fedora:latest"
+  - name: boot_disk.size_gib
+    editable: true
+    default_value: "10"
+  - name: instance_type
+    editable: true
+  - name: run_strategy
+    editable: true
+    default_value: Always
+  - name: user_data
+    editable: true
+  - name: network_attachments
+    editable: true
