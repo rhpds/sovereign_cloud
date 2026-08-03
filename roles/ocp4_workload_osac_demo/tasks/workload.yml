@@ -19,10 +19,12 @@
   - name: Download osac CLI binary
     ansible.builtin.get_url:
       url: >-
-        https://github.com/osac-project/fulfillment-service/releases/download/{{
+        https://github.com/osac-project/osac/releases/download/{{
         ocp4_workload_osac_demo_cli_version }}/osac_Linux_x86_64
       dest: /usr/local/bin/osac
-      mode: "0755"
+      mode: ug=rwx,o=rx
+      owner: root
+      group: root
     retries: 3
     delay: 10
     register: r_osac_cli
@@ -92,7 +94,7 @@
 # ------------------------------------------------
 # 3. Add tenant users to Keycloak organization
 # ------------------------------------------------
-- name: Add tenant users to Keycloak organization
+- name: Configure Keycloak organization and tenant users
   delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
   ansible.builtin.shell:
     cmd: |
@@ -113,19 +115,28 @@
         exit 1
       fi
 
-      # Wait for tenant reconciler to create the Keycloak org
-      for i in $(seq 1 30); do
+      # Find or create the Keycloak organization
+      ORG_ID=$(curl -sk -H "Authorization: Bearer ${TOKEN}" \
+        "${KC_URL}/admin/realms/${REALM}/organizations?search=${ORG}&exact=true" \
+        | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d[0]["id"] if d else "")' 2>/dev/null)
+
+      if [ -z "${ORG_ID}" ]; then
+        curl -sk -X POST \
+          -H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json" \
+          "${KC_URL}/admin/realms/${REALM}/organizations" \
+          -d "{\"name\": \"${ORG}\", \"enabled\": true}"
         ORG_ID=$(curl -sk -H "Authorization: Bearer ${TOKEN}" \
           "${KC_URL}/admin/realms/${REALM}/organizations?search=${ORG}&exact=true" \
           | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d[0]["id"] if d else "")' 2>/dev/null)
-        [ -n "${ORG_ID}" ] && break
-        sleep 10
-      done
-      if [ -z "${ORG_ID:-}" ]; then
-        echo "Keycloak organization '${ORG}' not found after waiting" >&2
+        echo "created organization ${ORG} (${ORG_ID})"
+      else
+        echo "organization ${ORG} already exists (${ORG_ID})"
+      fi
+
+      if [ -z "${ORG_ID}" ]; then
+        echo "Failed to create or find organization '${ORG}'" >&2
         exit 1
       fi
-      echo "org_id=${ORG_ID}"
 
       # Add each tenant user to the org
       {% for user in ocp4_workload_osac_demo_tenant_users %}

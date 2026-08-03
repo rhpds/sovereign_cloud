@@ -12,7 +12,7 @@ ocp4_workload_osac_demo_storage_class: ocs-external-storagecluster-ceph-rbd
 # ------------------------------------------------
 # osac CLI
 # ------------------------------------------------
-ocp4_workload_osac_demo_cli_version: "v0.0.75"
+ocp4_workload_osac_demo_cli_version: "v0.0.82"
 
 # ------------------------------------------------
 # Keycloak credentials (from ocp4_workload_osac role)
