@@ -25,6 +25,7 @@
       mode: ug=rwx,o=rx
       owner: root
       group: root
+      force: true
     retries: 3
     delay: 10
     register: r_osac_cli
@@ -310,8 +311,8 @@
           --token-script "oc create token -n {{ ocp4_workload_osac_demo_namespace }} admin" \
           --address "{{ _ocp4_workload_osac_demo_fulfillment_internal }}"
 
-        osac create -f /tmp/demo-instancetype.yaml 2>&1 || true
-        osac create -f /tmp/demo-catalogitem.yaml 2>&1 || true
+        osac create -f /tmp/demo-instancetype.yaml 2>&1
+        osac create -f /tmp/demo-catalogitem.yaml 2>&1
 
         echo "=== Verify ==="
         osac get instancetype {{ ocp4_workload_osac_demo_instance_type_name }}
