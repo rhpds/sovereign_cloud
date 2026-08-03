@@ -161,7 +161,7 @@
       VALUES_FILE=values/demo/values.yaml
       INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
       2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
-    chdir: "~{{ ansible_user }}/osac-installer"
+    chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
   changed_when: true
   async: 3600
   poll: 30
@@ -175,7 +175,7 @@
       VALUES_FILE=values/demo/values.yaml
       INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
       2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
-    chdir: "~{{ ansible_user }}/osac-installer"
+    chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
   changed_when: true
   async: 3600
   poll: 30
