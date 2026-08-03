@@ -88,7 +88,7 @@
     _ocp4_workload_osac_ui_url: "https://{{ r_osac_ui_route.resources[0].spec.host }}"
 
 - name: Save OSAC UI URL to user info
-  agnosticd.core.agnosticd_user_data:
+  agnosticd.core.agnosticd_user_info:
     data:
       osac_ui_url: "{{ _ocp4_workload_osac_ui_url }}"
       osac_admin_user: "{{ ocp4_workload_osac_admin_user }}"
