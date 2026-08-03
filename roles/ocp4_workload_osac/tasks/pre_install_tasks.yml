@@ -129,6 +129,12 @@
       regexp: '"foobar"'
       replace: '"{{ _ocp4_workload_osac_user_password }}"'
 
+  - name: Add admin user to set-passwords script
+    ansible.builtin.lineinfile:
+      path: "{{ _ocp4_workload_osac_kc_resources }}"
+      insertafter: 'Setting passwords for all tenant users'
+      line: '    set_password "{{ ocp4_workload_osac_admin_user }}" "{{ _ocp4_workload_osac_admin_password }}"'
+
   - name: Ensure values directory exists
     ansible.builtin.file:
       path: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/demo"
