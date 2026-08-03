@@ -72,27 +72,27 @@
         path: /usr/bin/helm-linux-amd64
         state: absent
 
-  - name: Ensure osac-installer directory does not exist
+  - name: Ensure osac directory does not exist
     ansible.builtin.file:
-      path: "~{{ ansible_user }}/osac-installer"
+      path: "~{{ ansible_user }}/osac"
       state: absent
 
-  - name: Clone osac-installer and initialize submodules
+  - name: Clone osac and initialize submodules
     ansible.builtin.git:
-      repo: "{{ ocp4_workload_osac_installer_repo }}"
-      dest: "~{{ ansible_user }}/osac-installer"
+      repo: "{{ ocp4_workload_osac_repo }}"
+      dest: "~{{ ansible_user }}/osac"
       recursive: true
-      version: "{{ ocp4_workload_osac_installer_version }}"
+      version: "{{ ocp4_workload_osac_repo_version }}"
 
   - name: Patch Makefile to add --take-ownership to helm upgrade calls
     ansible.builtin.replace:
-      path: "~{{ ansible_user }}/osac-installer/Makefile"
+      path: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/Makefile"
       regexp: '--timeout'
       replace: '--take-ownership --timeout'
 
   - name: Increase backoffLimit on prereqs hook jobs
     ansible.builtin.replace:
-      path: "~{{ ansible_user }}/osac-installer/charts/osac-prereqs/templates/hooks/{{ item }}"
+      path: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-prereqs/templates/hooks/{{ item }}"
       regexp: 'backoffLimit: 5'
       replace: 'backoffLimit: 30'
     loop:
@@ -102,20 +102,20 @@
 
   - name: Ensure values directory exists
     ansible.builtin.file:
-      path: "~{{ ansible_user }}/osac-installer/values/demo"
+      path: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/demo"
       state: directory
       mode: ug=rwx,go=rx
 
   - name: Write OSAC values file
     ansible.builtin.template:
       src: values.yaml.j2
-      dest: "~{{ ansible_user }}/osac-installer/values/demo/values.yaml"
+      dest: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/demo/values.yaml"
       mode: ug=rw,go=r
 
   - name: Write AAP license file
     ansible.builtin.copy:
       content: "{{ ocp4_workload_osac_aap_license }}"
-      dest: "~{{ ansible_user }}/osac-installer/values/demo/license.zip"
+      dest: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/demo/license.zip"
       mode: ug=rw,go=r
 
   - name: "OSAC Phase 1: Install operators"
@@ -126,7 +126,7 @@
         VALUES_FILE=values/demo/values.yaml
         INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
         2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
-      chdir: "~{{ ansible_user }}/osac-installer"
+      chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
     changed_when: true
     async: 3600
     poll: 30
