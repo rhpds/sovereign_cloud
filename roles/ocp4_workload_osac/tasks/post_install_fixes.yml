@@ -45,18 +45,6 @@
       -p '{"status":{"storageClasses":[{"name":"{{ ocp4_workload_osac_storage_class }}","tier":"default"}]}}'
   changed_when: true
 
-- name: Label storage class for OSAC Tenant
-  kubernetes.core.k8s:
-    state: patched
-    api_version: storage.k8s.io/v1
-    kind: StorageClass
-    name: "{{ ocp4_workload_osac_storage_class }}"
-    definition:
-      metadata:
-        labels:
-          osac.openshift.io/tenant: Default
-          osac.openshift.io/storage-tier: default
-
 # --------------------------------------------------------------
 # Keycloak public URL configuration (required for browser login)
 # --------------------------------------------------------------

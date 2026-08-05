@@ -152,3 +152,15 @@
       content: "{{ ocp4_workload_osac_aap_license }}"
       dest: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/demo/license.zip"
       mode: ug=rw,go=r
+
+- name: Label storage class for OSAC Tenant
+  kubernetes.core.k8s:
+    state: patched
+    api_version: storage.k8s.io/v1
+    kind: StorageClass
+    name: "{{ ocp4_workload_osac_storage_class }}"
+    definition:
+      metadata:
+        labels:
+          osac.openshift.io/tenant: Default
+          osac.openshift.io/storage-tier: default
