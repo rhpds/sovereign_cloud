@@ -7,7 +7,7 @@
     api_version: route.openshift.io/v1
     kind: Route
     name: osac-ui
-    namespace: "{{ ocp4_workload_osac_namespace }}"
+    namespace: "{{ ocp4_workload_osac_demo_namespace }}"
   register: r_osac_ui_route
 
 - name: Assert that OSAC Route URL exists
