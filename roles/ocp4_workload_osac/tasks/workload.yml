@@ -87,7 +87,7 @@
   kubernetes.core.k8s_info:
     api_version: route.openshift.io/v1
     kind: Route
-    name: fullfillment-api
+    name: fulfillment-api
     namespace: "{{ ocp4_workload_osac_namespace }}"
   register: r_fullfillment_api_route
   until: r_fullfillment_api_route.resources | length > 0
