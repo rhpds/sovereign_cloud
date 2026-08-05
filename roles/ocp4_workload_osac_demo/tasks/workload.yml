@@ -1,5 +1,23 @@
 ---
 # ------------------------------------------------
+# Make sure OSAC is deployed
+# ------------------------------------------------
+- name: Get OSAC UI Route URL
+  kubernetes.core.k8s_info:
+    api_version: route.openshift.io/v1
+    kind: Route
+    name: osac-ui
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+  register: r_osac_ui_route
+
+- name: Assert that OSAC Route URL exists
+  ansible.builtin.assert:
+    that: 
+    - r_osac_ui_route.resources | length > 0
+    fail_msg: "OSAC UI Route URL not found"
+    success_msg: "OSAC UI Route URL found"
+
+# ------------------------------------------------
 # Discover cluster endpoints
 # ------------------------------------------------
 - name: Set Keycloak URL
