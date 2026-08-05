@@ -83,9 +83,45 @@
   retries: 30
   delay: 10
 
+- name: Get Fullfillment API Route URL
+  kubernetes.core.k8s_info:
+    api_version: route.openshift.io/v1
+    kind: Route
+    name: fullfillment-api
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+  register: r_fullfillment_api_route
+  until: r_fullfillment_api_route.resources | length > 0
+  retries: 30
+  delay: 10
+
+- name: Get AAP Route URL
+  kubernetes.core.k8s_info:
+    api_version: route.openshift.io/v1
+    kind: Route
+    name: osac-aap
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+  register: r_osac_aap_route
+  until: r_osac_aap_route.resources | length > 0
+  retries: 30
+  delay: 10
+
+- name: Get Keycloak Route URL
+  kubernetes.core.k8s_info:
+    api_version: route.openshift.io/v1
+    kind: Route
+    name: keycloak
+    namespace: keycloak
+  register: r_keycloak_route
+  until: r_keycloak_route.resources | length > 0
+  retries: 30
+  delay: 10
+
 - name: Set OSAC UI URL fact
   ansible.builtin.set_fact:
     _ocp4_workload_osac_ui_url: "https://{{ r_osac_ui_route.resources[0].spec.host }}"
+    _ocp4_workload_osac_fullfillment_api_url: "https://{{ r_fullfillment_api_route.resources[0].spec.host }}"
+    _ocp4_workload_osac_aap_url: "https://{{ r_osac_aap_route.resources[0].spec.host }}"
+    _ocp4_workload_osac_keycloak_url: "https://{{ r_keycloak_route.resources[0].spec.host }}"
 
 - name: Save OSAC UI URL to user info
   agnosticd.core.agnosticd_user_info:
@@ -94,3 +130,6 @@
       osac_admin_user: "{{ ocp4_workload_osac_admin_user }}"
       osac_admin_password: "{{ _ocp4_workload_osac_admin_password }}"
       osac_user_password: "{{ _ocp4_workload_osac_user_password }}"
+      osac_fullfillment_api_url: "{{ _ocp4_workload_osac_fullfillment_api_url }}"
+      osac_aap_url: "{{ _ocp4_workload_osac_aap_url }}"
+      osac_keycloak_url: "{{ _ocp4_workload_osac_keycloak_url }}"
