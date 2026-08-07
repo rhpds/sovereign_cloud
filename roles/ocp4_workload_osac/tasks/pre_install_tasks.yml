@@ -109,7 +109,7 @@
     ansible.builtin.replace:
       path: "{{ _ocp4_workload_osac_kc_resources }}"
       regexp: '(name: KEYCLOAK_ADMIN\n\s+value: )admin(\n\s+- name: KEYCLOAK_ADMIN_PASSWORD\n\s+value: )admin'
-      replace: '\1{{ ocp4_workload_osac_admin_user }}\2{{ _ocp4_workload_osac_admin_password }}'
+      replace: '\g<1>{{ ocp4_workload_osac_admin_user }}\g<2>{{ _ocp4_workload_osac_admin_password }}'
 
   - name: Patch admin username in set-passwords script
     ansible.builtin.replace:
