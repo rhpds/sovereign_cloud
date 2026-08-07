@@ -164,7 +164,7 @@
   - name: Copy AAP licence to bastion
     ansible.builtin.copy:
       src: /tmp/aap-licence.zip
-      dest: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/demo/licence.zip"
+      dest: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/demo/license.zip"
       mode: ug=rw,go=r
 
 - name: Label storage class for OSAC Tenant
