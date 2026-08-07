@@ -52,8 +52,8 @@ ocp4_workload_osac_cluster_versions:
 ocp4_workload_osac_storage_class: ocs-external-storagecluster-ceph-rbd
 
 # ------------------------------------------------
-# AAP License (required, Ansible-vaulted license.zip)
-# To get a new license file:
+# AAP Licence (required, Ansible-vaulted licence.zip)
+# To get a new licence file:
 # Step 1: Create a Subscription Allocation
 # - Go to https://access.redhat.com/management/subscription_allocations
 # - Click "Create New subscription allocation"
@@ -70,17 +70,17 @@ ocp4_workload_osac_storage_class: ocs-external-storagecluster-ceph-rbd
 # - Go to https://console.redhat.com/subscriptions/manifests
 # - Search for your allocation name (e.g., osac-aap-lab), click on it
 # - Click "Export manifest", then download the ZIP file
-# Step 4: Replace the license.zip file in the S3 bucket (below) with the new one
+# Step 4: Replace the licence.zip file in the S3 bucket (below) with the new one
 # ------------------------------------------------
 
 # Log into AWS Infra Prod Account
 # Go to S3 Bucket rhdp-private
-# Upload the license.zip file as osac-aap-license.zip file
-# Get the URL for the file: https://rhdp-private.s3.us-east-1.amazonaws.com/osac-aap-license.zip
+# Upload the licence.zip file as osac-aap-licence.zip file
+# Get the URL for the file: https://rhdp-private.s3.us-east-1.amazonaws.com/osac-aap-licence.zip
 # Go to IAM -> IAM Users
-# Create a new user "s3-osac-aap-license"
+# Create a new user "s3-osac-aap-licence"
 # Select "Attach Policies directly"
-# Create policy "s3-osac-aap-license" with the following JSON:
+# Create policy "s3-osac-aap-licence" with the following JSON:
 
 # {
 #     "Version": "2012-10-17",
@@ -89,7 +89,7 @@ ocp4_workload_osac_storage_class: ocs-external-storagecluster-ceph-rbd
 #             "Sid": "VisualEditor0",
 #             "Effect": "Allow",
 #             "Action": "s3:GetObject",
-#             "Resource": "arn:aws:s3:::rhdp-private/osac-aap-license.zip"
+#             "Resource": "arn:aws:s3:::rhdp-private/osac-aap-licence.zip"
 #         },
 #         {
 #             "Sid": "VisualEditor1",
@@ -103,6 +103,6 @@ ocp4_workload_osac_storage_class: ocs-external-storagecluster-ceph-rbd
 # Back at the IAM User Create an Access Key (Use case: Other)
 # Vault the key and put it into the AgV file
 
-ocp4_workload_osac_aap_license_s3_url: https://rhdp-private.s3.us-east-1.amazonaws.com/osac-aap-license.zip
-ocp4_workload_osac_aap_license_s3_access_key_id: ""
-ocp4_workload_osac_aap_license_s3_secret_access_key: ""
+ocp4_workload_osac_aap_licence_s3_url: https://rhdp-private.s3.us-east-1.amazonaws.com/osac-aap-licence.zip
+ocp4_workload_osac_aap_licence_s3_access_key_id: ""
+ocp4_workload_osac_aap_licence_s3_secret_access_key: ""
