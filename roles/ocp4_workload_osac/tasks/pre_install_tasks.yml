@@ -77,7 +77,7 @@
       path: "~{{ ansible_user }}/osac"
       state: absent
 
-  - name: Clone osac and initialize submodules
+  - name: Clone osac repository from GitHub
     ansible.builtin.git:
       repo: "{{ ocp4_workload_osac_repo }}"
       dest: "~{{ ansible_user }}/osac"
@@ -159,7 +159,7 @@
         {{ ocp4_workload_osac_aap_license_s3_url | urlsplit('hostname')
            | regex_replace('^.*\.s3\.([^.]+)\.amazonaws\.com$', '\1') }}
     delegate_to: localhost
-    no_log: true
+    # no_log: true
 
   - name: Copy AAP license to bastion
     ansible.builtin.copy:
