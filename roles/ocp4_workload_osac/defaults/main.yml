@@ -75,8 +75,8 @@ ocp4_workload_osac_storage_class: ocs-external-storagecluster-ceph-rbd
 
 # Log into AWS Infra Prod Account
 # Go to S3 Bucket rhdp-private
-# Upload the license.zip file
-# Get the URL for the file: https://rhdp-private.s3.us-east-1.amazonaws.com/licence.zip
+# Upload the license.zip file as osac-aap-license.zip file
+# Get the URL for the file: https://rhdp-private.s3.us-east-1.amazonaws.com/osac-aap-license.zip
 # Go to IAM -> IAM Users
 # Create a new user "s3-osac-aap-license"
 # Select "Attach Policies directly"
@@ -89,7 +89,7 @@ ocp4_workload_osac_storage_class: ocs-external-storagecluster-ceph-rbd
 #             "Sid": "VisualEditor0",
 #             "Effect": "Allow",
 #             "Action": "s3:GetObject",
-#             "Resource": "arn:aws:s3:::rhdp-private/aap-license.zip"
+#             "Resource": "arn:aws:s3:::rhdp-private/osac-aap-license.zip"
 #         },
 #         {
 #             "Sid": "VisualEditor1",
@@ -103,6 +103,6 @@ ocp4_workload_osac_storage_class: ocs-external-storagecluster-ceph-rbd
 # Back at the IAM User Create an Access Key (Use case: Other)
 # Vault the key and put it into the AgV file
 
-ocp4_workload_osac_aap_license_s3_url: https://rhdp-private.s3.us-east-1.amazonaws.com/licence.zip
+ocp4_workload_osac_aap_license_s3_url: https://rhdp-private.s3.us-east-1.amazonaws.com/osac-aap-license.zip
 ocp4_workload_osac_aap_license_s3_access_key_id: ""
 ocp4_workload_osac_aap_license_s3_secret_access_key: ""
