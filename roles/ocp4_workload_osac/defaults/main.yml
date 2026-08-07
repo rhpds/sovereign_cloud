@@ -53,6 +53,56 @@ ocp4_workload_osac_storage_class: ocs-external-storagecluster-ceph-rbd
 
 # ------------------------------------------------
 # AAP License (required, Ansible-vaulted license.zip)
-# Provide via inventory or extra vars:
-#   ocp4_workload_osac_aap_license: "{{ vault_aap_license }}"
+# To get a new license file:
+# Step 1: Create a Subscription Allocation
+# - Go to https://access.redhat.com/management/subscription_allocations
+# - Click "Create New subscription allocation"
+# - Name: Give it a descriptive name (e.g., osac-aap-lab)
+# - Type: Select one from the list (e.g. "Satellite 6.14" is known to work)
+# - Click Create
+# Step 2: Add Entitlements
+# - Open your newly created allocation
+# - Go to the "Subscriptions" tab
+# - Click "Add Subscriptions"
+# - Find "Red Hat Ansible Automation Platform" in the list
+# - Add the desired quantity (1 is enough for a lab)
+# Step 3: Export and Download the Manifest
+# - Go to https://console.redhat.com/subscriptions/manifests
+# - Search for your allocation name (e.g., osac-aap-lab), click on it
+# - Click "Export manifest", then download the ZIP file
+# Step 4: Replace the license.zip file in the S3 bucket (below) with the new one
 # ------------------------------------------------
+
+# Log into AWS Infra Prod Account
+# Go to S3 Bucket rhdp-private
+# Upload the license.zip file
+# Get the URL for the file: https://rhdp-private.s3.us-east-1.amazonaws.com/licence.zip
+# Go to IAM -> IAM Users
+# Create a new user "s3-osac-aap-license"
+# Select "Attach Policies directly"
+# Create policy "s3-osac-aap-license" with the following JSON:
+
+# {
+#     "Version": "2012-10-17",
+#     "Statement": [
+#         {
+#             "Sid": "VisualEditor0",
+#             "Effect": "Allow",
+#             "Action": "s3:GetObject",
+#             "Resource": "arn:aws:s3:::rhdp-private/aap-license.zip"
+#         },
+#         {
+#             "Sid": "VisualEditor1",
+#             "Effect": "Allow",
+#             "Action": "s3:ListBucket",
+#             "Resource": "arn:aws:s3:::rhdp-private"
+#         }
+#     ]
+# }
+
+# Back at the IAM User Create an Access Key (Use case: Other)
+# Vault the key and put it into the AgV file
+
+ocp4_workload_osac_aap_license_s3_url: https://rhdp-private.s3.us-east-1.amazonaws.com/licence.zip
+ocp4_workload_osac_aap_license_s3_access_key_id: ""
+ocp4_workload_osac_aap_license_s3_secret_access_key: ""

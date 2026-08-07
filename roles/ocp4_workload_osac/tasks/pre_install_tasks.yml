@@ -147,9 +147,23 @@
       dest: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/demo/values.yaml"
       mode: ug=rw,go=r
 
-  - name: Write AAP license file
+  - name: Download AAP license from S3
+    amazon.aws.s3_object:
+      bucket: "{{ ocp4_workload_osac_aap_license_s3_url | urlsplit('hostname') | split('.') | first }}"
+      object: "{{ ocp4_workload_osac_aap_license_s3_url | urlsplit('path') | regex_replace('^/', '') }}"
+      dest: /tmp/aap-license.zip
+      mode: get
+      access_key: "{{ ocp4_workload_osac_aap_license_s3_access_key_id }}"
+      secret_key: "{{ ocp4_workload_osac_aap_license_s3_secret_access_key }}"
+      region: >-
+        {{ ocp4_workload_osac_aap_license_s3_url | urlsplit('hostname')
+           | regex_replace('^.*\.s3\.([^.]+)\.amazonaws\.com$', '\1') }}
+    delegate_to: localhost
+    no_log: true
+
+  - name: Copy AAP license to bastion
     ansible.builtin.copy:
-      content: "{{ ocp4_workload_osac_aap_license }}"
+      src: /tmp/aap-license.zip
       dest: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/demo/license.zip"
       mode: ug=rw,go=r
 
