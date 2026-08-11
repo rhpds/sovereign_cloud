@@ -29,8 +29,8 @@
   loop:
   - operator: kubevirt-hyperconverged.openshift-cnv
     namespace: openshift-cnv
-  - operator: multicluster-engine.multicluster-engine
-    namespace: multicluster-engine
+  # - operator: multicluster-engine.multicluster-engine
+  #   namespace: multicluster-engine
   loop_control:
     label: "{{ item.operator }}"
   register: r_csv_wait
