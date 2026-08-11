@@ -30,10 +30,10 @@ ocp4_workload_osac_rhcos_version: "9.8.20260428-0"
 # ------------------------------------------------
 # Container images
 # ------------------------------------------------
-ocp4_workload_osac_operator_image: ghcr.io/osac-project/osac-operator:latest
-ocp4_workload_osac_fulfillment_service_image: ghcr.io/osac-project/fulfillment-service:latest
+ocp4_workload_osac_operator_image: ghcr.io/osac-project/osac-operator:main
+ocp4_workload_osac_fulfillment_service_image: ghcr.io/osac-project/fulfillment-service:main
 ocp4_workload_osac_envoy_image: ghcr.io/osac-project/envoy:v1.33.0
-ocp4_workload_osac_ui_image: ghcr.io/osac-project/osac-ui:latest
+ocp4_workload_osac_ui_image: ghcr.io/osac-project/osac-ui:main
 ocp4_workload_osac_aap_bootstrap_image: ghcr.io/osac-project/osac-aap:latest
 
 # ------------------------------------------------

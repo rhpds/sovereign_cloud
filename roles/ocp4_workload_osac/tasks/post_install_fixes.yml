@@ -34,16 +34,50 @@
   retries: 30
   delay: 10
 
-# - name: Patch Tenant 'shared' storage class status
-#   delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
-#   ansible.builtin.command:
-#     cmd: >-
-#       oc patch tenant shared
-#       -n {{ ocp4_workload_osac_namespace }}
-#       --type=merge
-#       --subresource=status
-#       -p '{"status":{"storageClasses":[{"name":"{{ ocp4_workload_osac_storage_class }}","tier":"default"}]}}'
-#   changed_when: true
+# --------------------------------------------------
+# OSAC AAP token (required for operator to reach AAP)
+# --------------------------------------------------
+- name: Wait for AAP token creation job to complete
+  kubernetes.core.k8s_info:
+    api_version: batch/v1
+    kind: Job
+    name: osac-aap-create-token
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    wait_condition:
+      type: Complete
+      status: "True"
+    wait_timeout: 600
+
+- name: Read osac-operator deployment
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: osac-operator
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+  register: r_osac_operator_deploy
+
+- name: Patch OSAC_AAP_TOKEN onto osac-operator deployment
+  vars:
+    _osac_container: "{{ r_osac_operator_deploy.resources[0].spec.template.spec.containers[0] }}"
+  kubernetes.core.k8s:
+    state: patched
+    api_version: apps/v1
+    kind: Deployment
+    name: osac-operator
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    definition:
+      spec:
+        template:
+          spec:
+            containers:
+            - name: "{{ _osac_container.name }}"
+              image: "{{ _osac_container.image }}"
+              env:
+              - name: OSAC_AAP_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: osac-aap-api-token
+                    key: token
 
 # --------------------------------------------------------------
 # Keycloak public URL configuration (required for browser login)
@@ -267,47 +301,25 @@
       status: "True"
     wait_timeout: 180
 
-# --------------------------------------------------
-# OSAC AAP token (required for operator to reach AAP)
-# --------------------------------------------------
-- name: Wait for AAP token creation job to complete
+- name: Verify osac-ui ConfigMap fulfillment URL
   kubernetes.core.k8s_info:
-    api_version: batch/v1
-    kind: Job
-    name: osac-aap-create-token
+    api_version: v1
+    kind: ConfigMap
+    name: osac-ui
     namespace: "{{ ocp4_workload_osac_namespace }}"
-    wait_condition:
-      type: Complete
-      status: "True"
-    wait_timeout: 600
+  register: r_osac_ui_cm
 
-- name: Read osac-operator deployment
-  kubernetes.core.k8s_info:
-    api_version: apps/v1
-    kind: Deployment
-    name: osac-operator
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-  register: r_osac_operator_deploy
-
-- name: Patch OSAC_AAP_TOKEN onto osac-operator deployment
-  vars:
-    _osac_container: "{{ r_osac_operator_deploy.resources[0].spec.template.spec.containers[0] }}"
+- name: Patch osac-ui ConfigMap fulfillment URL if incorrect
+  when: >-
+    r_osac_ui_cm.resources | length > 0 and
+    r_osac_ui_cm.resources[0].data.FULFILLMENT_API_URL | default('')
+    != 'https://fulfillment-internal-api:8001'
   kubernetes.core.k8s:
     state: patched
-    api_version: apps/v1
-    kind: Deployment
-    name: osac-operator
+    api_version: v1
+    kind: ConfigMap
+    name: osac-ui
     namespace: "{{ ocp4_workload_osac_namespace }}"
     definition:
-      spec:
-        template:
-          spec:
-            containers:
-            - name: "{{ _osac_container.name }}"
-              image: "{{ _osac_container.image }}"
-              env:
-              - name: OSAC_AAP_TOKEN
-                valueFrom:
-                  secretKeyRef:
-                    name: osac-aap-api-token
-                    key: token
+      data:
+        FULFILLMENT_API_URL: "https://fulfillment-internal-api:8001"

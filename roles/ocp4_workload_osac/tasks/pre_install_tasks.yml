@@ -83,22 +83,19 @@
       dest: "~{{ ansible_user }}/osac"
       recursive: true
       version: "{{ ocp4_workload_osac_repo_version }}"
+      depth: 1
+
+  - name: Ensure Makefile uses bash shell
+    ansible.builtin.lineinfile:
+      path: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/Makefile"
+      line: "SHELL := /bin/bash"
+      insertbefore: BOF
 
   - name: Patch Makefile to add --take-ownership to helm upgrade calls
     ansible.builtin.replace:
       path: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/Makefile"
       regexp: '--timeout'
       replace: '--take-ownership --timeout'
-
-  - name: Increase backoffLimit on prereqs hook jobs
-    ansible.builtin.replace:
-      path: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-prereqs/templates/hooks/{{ item }}"
-      regexp: 'backoffLimit: 5'
-      replace: 'backoffLimit: 30'
-    loop:
-    - configure-cnv.yaml
-    - configure-mce.yaml
-    - configure-metallb.yaml
 
   - name: Set Keycloak chart resources path
     ansible.builtin.set_fact:
@@ -176,5 +173,5 @@
     definition:
       metadata:
         labels:
-          osac.openshift.io/tenant: Default
+          osac.openshift.io/tenant: shared
           osac.openshift.io/storage-tier: default

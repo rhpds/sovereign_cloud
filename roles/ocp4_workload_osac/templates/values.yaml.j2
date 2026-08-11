@@ -1,6 +1,4 @@
-# {{ ansible_managed }}
-# OSAC Demo Platform — VMaaS + CaaS
-
+# --- Prerequisites ---
 certManager:
   enabled: true
 trustManager:
@@ -18,43 +16,47 @@ metallb:
 cnv:
   enabled: true
 mce:
-  enabled: true
-  osImages:
-  - openshiftVersion: "{{ ocp4_workload_osac_openshift_version }}"
-    version: "{{ ocp4_workload_osac_rhcos_version }}"
-    url: >-
-      https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/{{ ocp4_workload_osac_openshift_version }}/{{ ocp4_workload_osac_openshift_version }}.0/rhcos-{{ ocp4_workload_osac_openshift_version }}.0-x86_64-live-iso.x86_64.iso
-    cpuArchitecture: "x86_64"
+  enabled: false
 
+# OSAC VMaaS (VM-as-a-Service) CI Environment Values
+# VMaaS CI values
+
+# --- Operator ---
 operator:
   image:
-    repository: "{{ ocp4_workload_osac_operator_image | regex_replace(':.*$', '') }}"
-    tag: "{{ ocp4_workload_osac_operator_image | regex_replace('^.*:', '') }}"
+    repository: ghcr.io/osac-project/osac-operator
+    tag: latest
     pullPolicy: Always
   provisioning:
     provider: "aap"
   aap:
-    url: ""
     insecureSkipVerify: "true"
-    statusPollInterval: "30s"
-    templatePrefix: "osac"
+    tokenSecret:
+      name: osac-aap-api-token
+      key: token
   fulfillment:
     serverAddress: "fulfillment-internal-api:8001"
     tokenFile: "/var/run/secrets/kubernetes.io/serviceaccount/token"
   controllers:
-    clusterOrder: true
+    clusterOrder: false
     computeInstance: true
     tenant: true
     networking: true
     storage: true
+  hubAccess:
+    enabled: true
+  tenants:
+  - name: shared
+  - name: osac-e2e-ci
 
+# --- Fulfillment Service ---
 service:
+  externalHostname: ""  # Set to fulfillment-api-<namespace>.apps.<cluster>.<domain>
+  internalHostname: ""  # Set to fulfillment-internal-api-<namespace>.apps.<cluster>.<domain>
   variant: openshift
-  externalHostname: "fulfillment-api-{{ ocp4_workload_osac_namespace }}.{{ openshift_cluster_ingress_domain }}"
-  internalHostname: "fulfillment-internal-api-{{ ocp4_workload_osac_namespace }}.{{ openshift_cluster_ingress_domain }}"
   images:
-    service: "{{ ocp4_workload_osac_fulfillment_service_image }}"
-    envoy: "{{ ocp4_workload_osac_envoy_image }}"
+    service: ghcr.io/osac-project/fulfillment-service:main
+    envoy: ghcr.io/osac-project/envoy:v1.33.0
   certs:
     issuerRef:
       kind: ClusterIssuer
@@ -62,12 +64,13 @@ service:
     caBundle:
       configMap: ca-bundle
   auth:
-    issuerUrl: https://keycloak-keycloak.{{ openshift_cluster_ingress_domain }}/realms/osac
+    issuerUrl: https://keycloak.keycloak.svc.cluster.local/realms/osac
     emergencyServiceAccounts:
     - admin
     - osac-operator
     - osac-operator-controller-manager
     - template-publisher
+    - osac-metering
     controllerCredentials:
     - secret:
         name: fulfillment-controller-credentials
@@ -78,7 +81,7 @@ service:
           param: client-secret
   idp:
     provider: keycloak
-    url: https://keycloak-keycloak.{{ openshift_cluster_ingress_domain }}
+    url: https://keycloak.keycloak.svc.cluster.local
     credentials:
     - secret:
         name: fulfillment-controller-credentials
@@ -104,12 +107,13 @@ service:
         - key: ca.crt
           param: sslrootcert
   log:
-    level: info
+    level: debug
 
+# --- UI ---
 ui:
   enabled: true
   images:
-    ui: "{{ ocp4_workload_osac_ui_image }}"
+    ui: ghcr.io/osac-project/osac-ui:v0.0.5
   api:
     fulfillment:
       certs:
@@ -120,60 +124,82 @@ ui:
       caBundle:
         configMap: ca-bundle
 
+# --- AAP ---
 aap:
   aap:
     instance:
       enabled: true
-      name: osac-aap
+      name: "osac-aap"
   bootstrap:
     enabled: true
-    image: "{{ ocp4_workload_osac_aap_bootstrap_image }}"
+    image: ghcr.io/osac-project/osac-aap:latest
     backoffLimit: 15
+  configAsCode:
+    manifestSecret: "config-as-code-manifest-ig"
+    secret: "config-as-code-ig"
+    # NOTE: e2e's COMPONENT_BUILD_RESULTS image-override step overrides
+    # bootstrap.image with this PR's own built image but does not touch
+    # eeImage, so the two can diverge at e2e runtime even though they're
+    # the same base value here. Extending that override to cover eeImage
+    # too is tracked separately (OSAC-3545), since it lives in
+    # osac-test-infra, not this repo.
+    eeImage: "ghcr.io/osac-project/osac-aap:latest"
+    projectGitUri: "https://github.com/osac-project/osac"
+    projectGitBranch: "main"
   instanceGroups:
-    clusterFulfillment:
+    storageFulfillment:
       enabled: true
-      config:
-        NETWORK_CLASS: "esi"
-        NETWORK_STEPS_COLLECTION: "osac.steps"
-        EXTERNAL_ACCESS_BASE_DOMAIN: "box.massopen.cloud"
-        EXTERNAL_ACCESS_SUPPORTED_BASE_DOMAINS: "box.massopen.cloud"
-        EXTERNAL_ACCESS_API_INTERNAL_NETWORK: "hypershift"
-        HOSTED_CLUSTER_BASE_DOMAIN: "box.massopen.cloud"
-        HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY: "HighlyAvailable"
-        HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY: "HighlyAvailable"
-    networkFulfillment:
-      enabled: true
-      config:
-        NETRIS_CONTROLLER_URL: "https://redhat-ctl.netris.io"
-        NETRIS_USERNAME: "netris"
-        NETRIS_SITE_ID: "5"
-        NETRIS_TENANT_ID: "1"
-        NETRIS_TENANT_NAME: "Admin"
 
+# --- Validation ---
 validation:
   enabled: true
 
-# Required on demo labs unless an external Postgres + fulfillment-db secret exist
+# --- Bare Metal Fulfillment Operator ---
+bmf:
+  enabled: false
+
+# --- CI/dev only ---
+# Hub access: registers local cluster as a hub. Only for environments
+# where the fulfillment service and hub cluster are the same.
+hubAccess:
+  enabled: true
+
+# Bundled PostgreSQL: single-pod ephemeral database for testing.
+# Uses fsync=off — data is lost on restart. Not for production.
 bundledPostgres:
   enabled: true
   database:
     name: service
     user: service
 
-hubAccess:
+# --- Kafka (metering infrastructure) ---
+kafka:
   enabled: true
 
-# BMaaS off unless Ironic/inventory secrets are provisioned (blocks Helm --wait otherwise)
-bmf:
-  enabled: false
-
-clusterVersions:
-  enabled: false
-  versions:
-{% for cv in ocp4_workload_osac_cluster_versions %}
-  - version: "{{ cv.version }}"
-    image: "{{ cv.image }}"
-{% if cv.default | default(false) %}
-    default: true
-{% endif %}
-{% endfor %}
+# --- Metering ---
+metering:
+  enabled: true
+  # Echo adapter — test/development tool only. Consumes metering events from
+  # Kafka and exposes them via HTTP for E2E test assertions.
+  echoAdapter:
+    enabled: true
+    image:
+      repository: ghcr.io/osac-project/metering-echo-adapter
+      tag: latest
+      pullPolicy: Always
+  database:
+    connection:
+    - secret:
+        name: metering-db
+        items:
+        - key: url
+          param: url
+    - secret:
+        name: postgres-client-cert-metering
+        items:
+        - key: tls.crt
+          param: sslcert
+        - key: tls.key
+          param: sslkey
+        - key: ca.crt
+          param: sslrootcert
