@@ -34,6 +34,30 @@
     _ocp4_workload_osac_helm_url: >-
       {{ '{0}/helm/latest/helm-linux-amd64.tar.gz'.format(ocp4_workload_osac_helm_mirror) }}
 
+- name: Download AAP license from S3 into the Execution Environment
+  amazon.aws.s3_object:
+    bucket: "{{ ocp4_workload_osac_aap_license_s3_url | urlsplit('hostname') | split('.') | first }}"
+    object: "{{ ocp4_workload_osac_aap_license_s3_url | urlsplit('path') | regex_replace('^/', '') }}"
+    dest: /tmp/aap-license.zip
+    mode: get
+    access_key: "{{ ocp4_workload_osac_aap_license_s3_access_key_id }}"
+    secret_key: "{{ ocp4_workload_osac_aap_license_s3_secret_access_key }}"
+    region: >-
+      {{ ocp4_workload_osac_aap_license_s3_url | urlsplit('hostname')
+          | regex_replace('^.*\.s3\.([^.]+)\.amazonaws\.com$', '\1') }}
+
+- name: Label storage class for OSAC Tenant
+  kubernetes.core.k8s:
+    state: patched
+    api_version: storage.k8s.io/v1
+    kind: StorageClass
+    name: "{{ ocp4_workload_osac_storage_class }}"
+    definition:
+      metadata:
+        labels:
+          osac.openshift.io/tenant: shared
+          osac.openshift.io/storage-tier: default
+
 - name: Run on Bastion
   delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
   block:
@@ -132,46 +156,8 @@
       insertafter: 'Setting passwords for all tenant users'
       line: '    set_password "{{ ocp4_workload_osac_admin_user }}" "{{ _ocp4_workload_osac_admin_password }}"'
 
-  - name: Ensure values directory exists
-    ansible.builtin.file:
-      path: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/demo"
-      state: directory
-      mode: ug=rwx,go=rx
-
-  - name: Write OSAC values file
-    ansible.builtin.template:
-      src: values.yaml.j2
-      dest: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/demo/values.yaml"
-      mode: ug=rw,go=r
-
-  - name: Download AAP licence from S3
-    amazon.aws.s3_object:
-      bucket: "{{ ocp4_workload_osac_aap_licence_s3_url | urlsplit('hostname') | split('.') | first }}"
-      object: "{{ ocp4_workload_osac_aap_licence_s3_url | urlsplit('path') | regex_replace('^/', '') }}"
-      dest: /tmp/aap-licence.zip
-      mode: get
-      access_key: "{{ ocp4_workload_osac_aap_licence_s3_access_key_id }}"
-      secret_key: "{{ ocp4_workload_osac_aap_licence_s3_secret_access_key }}"
-      region: >-
-        {{ ocp4_workload_osac_aap_licence_s3_url | urlsplit('hostname')
-           | regex_replace('^.*\.s3\.([^.]+)\.amazonaws\.com$', '\1') }}
-    delegate_to: localhost
-    # no_log: true
-
-  - name: Copy AAP licence to bastion
+  - name: Copy AAP license from Execution Environment to the Installer directory
     ansible.builtin.copy:
-      src: /tmp/aap-licence.zip
-      dest: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/demo/license.zip"
+      src: /tmp/aap-license.zip
+      dest: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/{{ ocp4_workload_osac_installer_values_directory }}/license.zip"
       mode: ug=rw,go=r
-
-- name: Label storage class for OSAC Tenant
-  kubernetes.core.k8s:
-    state: patched
-    api_version: storage.k8s.io/v1
-    kind: StorageClass
-    name: "{{ ocp4_workload_osac_storage_class }}"
-    definition:
-      metadata:
-        labels:
-          osac.openshift.io/tenant: shared
-          osac.openshift.io/storage-tier: default

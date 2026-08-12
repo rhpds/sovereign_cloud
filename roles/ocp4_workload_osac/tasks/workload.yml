@@ -5,13 +5,16 @@
 - name: Call pre_install_tasks.yml
   ansible.builtin.include_tasks: pre_install_tasks.yml
 
+- name: Call setup_values.yml
+  ansible.builtin.include_tasks: setup_values.yml
+
 - name: "OSAC Phase 1: Install operators"
   delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
   ansible.builtin.shell:
     cmd: >-
       set -o pipefail;
       make install-operators
-      VALUES_FILE=values/demo/values.yaml
+      VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
       INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
       2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
     chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
@@ -19,7 +22,7 @@
   async: 3600
   poll: 30
 
-- name: Wait for CNV and MCE operators to be ready
+- name: Wait for operators to be ready
   kubernetes.core.k8s_info:
     api_version: operators.coreos.com/v1alpha1
     kind: ClusterServiceVersion
@@ -46,7 +49,7 @@
     cmd: >-
       set -o pipefail;
       make install-prereqs
-      VALUES_FILE=values/demo/values.yaml
+      VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
       INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
       2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
     chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
@@ -60,7 +63,7 @@
     cmd: >-
       set -o pipefail;
       make install-osac
-      VALUES_FILE=values/demo/values.yaml
+      VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
       INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
       2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
     chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
@@ -71,7 +74,7 @@
 - name: Call post_install_fixes.yml
   ansible.builtin.include_tasks: post_install_fixes.yml
 
-# Get data for AgnosticV
+# Get data for AgnosticD user info
 - name: Get OSAC UI Route URL
   kubernetes.core.k8s_info:
     api_version: route.openshift.io/v1
@@ -116,14 +119,14 @@
   retries: 30
   delay: 10
 
-- name: Set OSAC UI URL fact
+- name: Set URL facts
   ansible.builtin.set_fact:
     _ocp4_workload_osac_ui_url: "https://{{ r_osac_ui_route.resources[0].spec.host }}"
     _ocp4_workload_osac_fullfillment_api_url: "https://{{ r_fullfillment_api_route.resources[0].spec.host }}"
     _ocp4_workload_osac_aap_url: "https://{{ r_osac_aap_route.resources[0].spec.host }}"
     _ocp4_workload_osac_keycloak_url: "https://{{ r_keycloak_route.resources[0].spec.host }}"
 
-- name: Save OSAC UI URL to user info
+- name: Save AgnosticD user info
   agnosticd.core.agnosticd_user_info:
     data:
       osac_ui_url: "{{ _ocp4_workload_osac_ui_url }}"

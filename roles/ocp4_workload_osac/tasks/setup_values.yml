@@ -1,0 +1,16 @@
+---
+- name: Set values file path
+  ansible.builtin.set_fact:
+    ocp4_workload_osac_installer_values_file: >-
+      {{ ocp4_workload_osac_installer_values_directory }}/values.yaml
+
+- name: Modify values file
+  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
+  block:
+  - name: Set LVMS enabled state in values file
+    when: not ocp4_workload_osac_lvms_enabled | bool
+    ansible.builtin.replace:
+      path: >-
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/{{ ocp4_workload_osac_installer_values_file }}
+      regexp: '(lvms:\n\s+enabled:\s+)\w+'
+      replace: '\g<1>{{ ocp4_workload_osac_lvms_enabled | lower }}'
