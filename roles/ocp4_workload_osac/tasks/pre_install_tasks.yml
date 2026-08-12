@@ -125,7 +125,7 @@
     ansible.builtin.find:
       paths: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts"
       patterns: '*.yaml'
-      contains: 'helm.sh/hook'
+      file_type: file
       recurse: true
     register: r_hook_files
 
@@ -134,7 +134,7 @@
       path: "{{ item.path }}"
       regexp: 'memory: [0-9]+Mi'
       replace: 'memory: 1Gi'
-    loop: "{{ r_hook_files.files }}"
+    loop: "{{ r_hook_files.files | selectattr('path', 'search', '/hooks/') }}"
     loop_control:
       label: "{{ item.path | basename }}"
 
@@ -143,7 +143,7 @@
       path: "{{ item.path }}"
       regexp: 'backoffLimit: [0-9]+'
       replace: 'backoffLimit: 30'
-    loop: "{{ r_hook_files.files }}"
+    loop: "{{ r_hook_files.files | selectattr('path', 'search', '/hooks/') }}"
     loop_control:
       label: "{{ item.path | basename }}"
 
