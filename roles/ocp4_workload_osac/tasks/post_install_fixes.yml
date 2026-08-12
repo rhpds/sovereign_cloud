@@ -273,6 +273,45 @@
       done
   changed_when: true
 
+- name: Ensure admin user exists in osac realm
+  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      KC_URL="{{ _ocp4_workload_osac_kc_url }}"
+      ADMIN_USER="{{ ocp4_workload_osac_admin_user }}"
+      ADMIN_PASS="{{ _ocp4_workload_osac_admin_password }}"
+      for i in $(seq 1 5); do
+        RESP=$(curl -sk -X POST \
+          "${KC_URL}/realms/master/protocol/openid-connect/token" \
+          -d "grant_type=password&client_id=admin-cli&username=${ADMIN_USER}&password=${ADMIN_PASS}")
+        TOKEN=$(echo "$RESP" | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])' 2>/dev/null) && break
+        sleep 10
+      done
+      if [ -z "${TOKEN:-}" ]; then
+        echo "Failed to get Keycloak admin token" >&2
+        exit 1
+      fi
+      USERS=$(curl -sk -H "Authorization: Bearer $TOKEN" \
+        "${KC_URL}/admin/realms/osac/users?username=${ADMIN_USER}&exact=true")
+      USER_ID=$(echo "$USERS" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d[0]["id"] if d else "")' 2>/dev/null)
+      if [ -z "$USER_ID" ]; then
+        curl -sk -X POST -H "Authorization: Bearer $TOKEN" \
+          -H "Content-Type: application/json" \
+          "${KC_URL}/admin/realms/osac/users" \
+          -d "{\"username\":\"${ADMIN_USER}\",\"enabled\":true}"
+        USER_ID=$(curl -sk -H "Authorization: Bearer $TOKEN" \
+          "${KC_URL}/admin/realms/osac/users?username=${ADMIN_USER}&exact=true" \
+          | python3 -c 'import sys,json; print(json.load(sys.stdin)[0]["id"])')
+        echo "created ${ADMIN_USER} in osac realm"
+      fi
+      curl -sk -X PUT -H "Authorization: Bearer $TOKEN" \
+        -H "Content-Type: application/json" \
+        "${KC_URL}/admin/realms/osac/users/${USER_ID}/reset-password" \
+        -d "{\"type\":\"password\",\"value\":\"${ADMIN_PASS}\",\"temporary\":false}"
+      echo "password set for ${ADMIN_USER} in osac realm"
+  changed_when: true
+
 - name: Restart OSAC UI and fulfillment controller
   kubernetes.core.k8s:
     state: patched
