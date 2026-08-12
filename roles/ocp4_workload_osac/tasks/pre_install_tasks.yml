@@ -96,6 +96,21 @@
         path: /usr/bin/helm-linux-amd64
         state: absent
 
+    - name: Download osac CLI
+      ansible.builtin.get_url:
+        url: >-
+          https://github.com/osac-project/osac/releases/download/{{
+          ocp4_workload_osac_cli_version }}/osac_Linux_x86_64
+        dest: /usr/local/bin/osac
+        mode: ug=rwx,o=rx
+        owner: root
+        group: root
+        force: true
+      retries: 3
+      delay: 10
+      register: r_osac_cli
+      until: r_osac_cli is success
+
   - name: Ensure osac directory does not exist
     ansible.builtin.file:
       path: "~{{ ansible_user }}/osac"
