@@ -312,74 +312,50 @@
       echo "password set for ${ADMIN_USER} in osac realm"
   changed_when: true
 
-# - name: Read fulfillment deployments for IdP URL patching
-#   kubernetes.core.k8s_info:
-#     api_version: apps/v1
-#     kind: Deployment
-#     name: "{{ item }}"
-#     namespace: "{{ ocp4_workload_osac_namespace }}"
-#   loop:
-#   - fulfillment-controller
-#   - fulfillment-grpc-server
-#   register: r_fulfillment_deploys
+# trust-manager Bundle only has internal CA; after reencrypt,
+# fulfillment pods need the router CA too — useDefaultCAs pulls it in.
+- name: Add system CAs to trust-manager ca-bundle
+  kubernetes.core.k8s:
+    state: patched
+    api_version: trust.cert-manager.io/v1alpha1
+    kind: Bundle
+    name: ca-bundle
+    definition:
+      spec:
+        sources:
+        - secret:
+            key: ca.crt
+            name: default-ca
+        - useDefaultCAs: true
 
-# - name: Patch fulfillment IdP URLs to use public Keycloak
-#   vars:
-#     _kc_issuer: "{{ _ocp4_workload_osac_kc_url }}/realms/osac"
-#     _container: "{{ item.resources[0].spec.template.spec.containers[0] }}"
-#     _new_cmd: >-
-#       {{ _container.command
-#          | map('regex_replace', '^--auth-issuer-url=.*', '--auth-issuer-url=' ~ _kc_issuer)
-#          | map('regex_replace', '^--idp-url=.*', '--idp-url=' ~ _ocp4_workload_osac_kc_url)
-#          | map('regex_replace', '^--grpc-authn-trusted-token-issuers=.*',
-#                '--grpc-authn-trusted-token-issuers=' ~ _kc_issuer)
-#          | list }}
-#   kubernetes.core.k8s:
-#     state: patched
-#     api_version: apps/v1
-#     kind: Deployment
-#     name: "{{ item.resources[0].metadata.name }}"
-#     namespace: "{{ ocp4_workload_osac_namespace }}"
-#     definition:
-#       spec:
-#         template:
-#           spec:
-#             containers:
-#             - name: "{{ _container.name }}"
-#               image: "{{ _container.image }}"
-#               command: "{{ _new_cmd }}"
-#   loop: "{{ r_fulfillment_deploys.results }}"
-#   loop_control:
-#     label: "{{ item.resources[0].metadata.name }}"
+- name: Restart OSAC UI and fulfillment services
+  kubernetes.core.k8s:
+    state: patched
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ item }}"
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    definition:
+      spec:
+        template:
+          metadata:
+            annotations:
+              kubectl.kubernetes.io/restartedAt: "{{ now(utc=true).isoformat() }}"
+  loop:
+  - osac-ui
+  - fulfillment-controller
+  - fulfillment-grpc-server
 
-# - name: Restart OSAC UI and fulfillment deployments
-#   kubernetes.core.k8s:
-#     state: patched
-#     api_version: apps/v1
-#     kind: Deployment
-#     name: "{{ item }}"
-#     namespace: "{{ ocp4_workload_osac_namespace }}"
-#     definition:
-#       spec:
-#         template:
-#           metadata:
-#             annotations:
-#               kubectl.kubernetes.io/restartedAt: "{{ now(utc=true).isoformat() }}"
-#   loop:
-#   - osac-ui
-#   - fulfillment-controller
-#   - fulfillment-grpc-server
-
-# - name: Wait for OSAC UI rollout
-#   kubernetes.core.k8s_info:
-#     api_version: apps/v1
-#     kind: Deployment
-#     name: osac-ui
-#     namespace: "{{ ocp4_workload_osac_namespace }}"
-#     wait_condition:
-#       type: Available
-#       status: "True"
-#     wait_timeout: 180
+- name: Wait for OSAC UI rollout
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: osac-ui
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    wait_condition:
+      type: Available
+      status: "True"
+    wait_timeout: 180
 
 - name: Verify osac-ui ConfigMap fulfillment URL
   kubernetes.core.k8s_info:
