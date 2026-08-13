@@ -5,7 +5,7 @@
       {{ ocp4_workload_osac_installer_values_directory }}/values.yaml
 
 - name: Modify values file
-  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
+  delegate_to: "{{ _bastion_host }}"
   block:
   - name: Set LVMS enabled state in values file
     when: not ocp4_workload_osac_lvms_enabled | bool

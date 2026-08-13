@@ -6,3 +6,5 @@ _ocp4_workload_osac_ui_url: ""
 _ocp4_workload_osac_fullfillment_api_url: ""
 _ocp4_workload_osac_aap_url: ""
 _ocp4_workload_osac_keycloak_url: ""
+
+_bastion_host: ""
