@@ -7,8 +7,20 @@ rules:
 - apiGroups:
   - osac.openshift.io
   resources:
-  - tenants
-  - tenants/status
+  - '*'
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - k8s.ovn.org
+  resources:
+  - clusteruserdefinednetworks
+  - userdefinednetworks
   verbs:
   - create
   - delete
