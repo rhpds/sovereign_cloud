@@ -8,19 +8,19 @@
 - name: Call setup_values.yml
   ansible.builtin.include_tasks: setup_values.yml
 
-- name: "OSAC Phase 1: Install operators"
-  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
-  ansible.builtin.shell:
-    cmd: >-
-      set -o pipefail;
-      make install-operators
-      VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
-      INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
-      2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
-    chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
-  changed_when: true
-  async: 3600
-  poll: 30
+# - name: "OSAC Phase 1: Install operators"
+#   delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
+#   ansible.builtin.shell:
+#     cmd: >-
+#       set -o pipefail;
+#       make install-operators
+#       VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
+#       INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
+#       2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
+#     chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
+#   changed_when: true
+#   async: 3600
+#   poll: 30
 
 - name: Wait for operators to be ready
   kubernetes.core.k8s_info:
@@ -43,33 +43,33 @@
   retries: 60
   delay: 30
 
-- name: "OSAC Phase 2: Install prerequisites"
-  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
-  ansible.builtin.shell:
-    cmd: >-
-      set -o pipefail;
-      make install-prereqs
-      VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
-      INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
-      2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
-    chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
-  changed_when: true
-  async: 3600
-  poll: 30
+# - name: "OSAC Phase 2: Install prerequisites"
+#   delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
+#   ansible.builtin.shell:
+#     cmd: >-
+#       set -o pipefail;
+#       make install-prereqs
+#       VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
+#       INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
+#       2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
+#     chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
+#   changed_when: true
+#   async: 3600
+#   poll: 30
 
-- name: "OSAC Phase 3: Install OSAC"
-  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
-  ansible.builtin.shell:
-    cmd: >-
-      set -o pipefail;
-      make install-osac
-      VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
-      INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
-      2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
-    chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
-  changed_when: true
-  async: 3600
-  poll: 30
+# - name: "OSAC Phase 3: Install OSAC"
+#   delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
+#   ansible.builtin.shell:
+#     cmd: >-
+#       set -o pipefail;
+#       make install-osac
+#       VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
+#       INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
+#       2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
+#     chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
+#   changed_when: true
+#   async: 3600
+#   poll: 30
 
 - name: Call post_install_fixes.yml
   ansible.builtin.include_tasks: post_install_fixes.yml

@@ -89,6 +89,19 @@
     _ocp4_workload_osac_ui_url: >-
       https://osac-ui-{{ ocp4_workload_osac_namespace }}.{{ openshift_cluster_ingress_domain }}
 
+- name: Patch Keycloak admin credentials secret
+  kubernetes.core.k8s:
+    state: patched
+    api_version: v1
+    kind: Secret
+    name: keycloak-admin-credentials
+    namespace: keycloak
+    definition:
+      stringData:
+        admin-username: "{{ ocp4_workload_osac_admin_user }}"
+        admin-password: "{{ _ocp4_workload_osac_admin_password }}"
+        default-user-password: "{{ _ocp4_workload_osac_user_password }}"
+
 - name: Read Keycloak TLS certificate
   kubernetes.core.k8s_info:
     api_version: cert-manager.io/v1
@@ -214,11 +227,14 @@
       set -euo pipefail
       KC_URL="{{ _ocp4_workload_osac_kc_url }}"
       UI_URL="{{ _ocp4_workload_osac_ui_url }}"
+      get_token() {
+        curl -sk -X POST "${KC_URL}/realms/master/protocol/openid-connect/token" \
+          -d "grant_type=password&client_id=admin-cli&username=$1&password=$2" \
+          | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])' 2>/dev/null
+      }
       for i in $(seq 1 5); do
-        RESP=$(curl -sk -X POST \
-          "${KC_URL}/realms/master/protocol/openid-connect/token" \
-          -d "grant_type=password&client_id=admin-cli&username={{ ocp4_workload_osac_admin_user }}&password={{ _ocp4_workload_osac_admin_password }}")
-        TOKEN=$(echo "$RESP" | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])' 2>/dev/null) && break
+        TOKEN=$(get_token "{{ ocp4_workload_osac_admin_user }}" "{{ _ocp4_workload_osac_admin_password }}") && break
+        TOKEN=$(get_token "admin" "admin") && break
         sleep 10
       done
       if [ -z "${TOKEN:-}" ]; then
@@ -281,11 +297,14 @@
       KC_URL="{{ _ocp4_workload_osac_kc_url }}"
       ADMIN_USER="{{ ocp4_workload_osac_admin_user }}"
       ADMIN_PASS="{{ _ocp4_workload_osac_admin_password }}"
+      get_token() {
+        curl -sk -X POST "${KC_URL}/realms/master/protocol/openid-connect/token" \
+          -d "grant_type=password&client_id=admin-cli&username=$1&password=$2" \
+          | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])' 2>/dev/null
+      }
       for i in $(seq 1 5); do
-        RESP=$(curl -sk -X POST \
-          "${KC_URL}/realms/master/protocol/openid-connect/token" \
-          -d "grant_type=password&client_id=admin-cli&username=${ADMIN_USER}&password=${ADMIN_PASS}")
-        TOKEN=$(echo "$RESP" | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])' 2>/dev/null) && break
+        TOKEN=$(get_token "${ADMIN_USER}" "${ADMIN_PASS}") && break
+        TOKEN=$(get_token "admin" "admin") && break
         sleep 10
       done
       if [ -z "${TOKEN:-}" ]; then
