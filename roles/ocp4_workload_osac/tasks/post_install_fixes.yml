@@ -1,4 +1,25 @@
 ---
+- name: Find pods in Error state
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    field_selectors:
+    - status.phase=Failed
+  register: r_failed_pods
+
+- name: Cleanup pods in Error state
+  when: r_failed_pods.resources | length > 0
+  kubernetes.core.k8s:
+    state: absent
+    api_version: v1
+    kind: Pod
+    name: "{{ item.metadata.name }}"
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+  loop: "{{ r_failed_pods.resources }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
+
 - name: Create hub-access ClusterRole and ClusterRoleBinding
   kubernetes.core.k8s:
     state: present
@@ -89,18 +110,18 @@
     _ocp4_workload_osac_ui_url: >-
       https://osac-ui-{{ ocp4_workload_osac_namespace }}.{{ openshift_cluster_ingress_domain }}
 
-- name: Patch Keycloak admin credentials secret
-  kubernetes.core.k8s:
-    state: patched
-    api_version: v1
-    kind: Secret
-    name: keycloak-admin-credentials
-    namespace: keycloak
-    definition:
-      stringData:
-        admin-username: "{{ ocp4_workload_osac_admin_user }}"
-        admin-password: "{{ _ocp4_workload_osac_admin_password }}"
-        default-user-password: "{{ _ocp4_workload_osac_user_password }}"
+# - name: Patch Keycloak admin credentials secret
+#   kubernetes.core.k8s:
+#     state: patched
+#     api_version: v1
+#     kind: Secret
+#     name: keycloak-admin-credentials
+#     namespace: keycloak
+#     definition:
+#       stringData:
+#         admin-username: "{{ ocp4_workload_osac_admin_user }}"
+#         admin-password: "{{ _ocp4_workload_osac_admin_password }}"
+#         default-user-password: "{{ _ocp4_workload_osac_user_password }}"
 
 - name: Read Keycloak TLS certificate
   kubernetes.core.k8s_info:

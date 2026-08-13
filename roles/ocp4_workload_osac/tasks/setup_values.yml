@@ -21,3 +21,20 @@
         ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/{{ ocp4_workload_osac_installer_values_file }}
       regexp: '(ghcr\.io/osac-project/osac-ui:)\S+'
       replace: '\g<1>main'
+
+  - name: Set Keycloak admin credentials in values file
+    ansible.builtin.lineinfile:
+      path: >-
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/{{ ocp4_workload_osac_installer_values_file }}
+      insertafter: '^keycloak:'
+      regexp: '^\s+{{ item.key }}:'
+      line: '  {{ item.key }}: {{ item.value }}'
+    loop:
+    - key: adminUsername
+      value: "{{ ocp4_workload_osac_admin_user }}"
+    - key: adminPassword
+      value: "{{ _ocp4_workload_osac_admin_password }}"
+    - key: defaultUserPassword
+      value: "{{ _ocp4_workload_osac_user_password }}"
+    loop_control:
+      label: "{{ item.key }}"

@@ -162,46 +162,46 @@
     loop_control:
       label: "{{ item.path | basename }}"
 
-  - name: Set Keycloak chart resources path
-    ansible.builtin.set_fact:
-      _ocp4_workload_osac_kc_resources: >-
-        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-prereqs/templates/keycloak/resources.yaml
+  # - name: Set Keycloak chart resources path
+  #   ansible.builtin.set_fact:
+  #     _ocp4_workload_osac_kc_resources: >-
+  #       ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-prereqs/templates/keycloak/resources.yaml
 
-  - name: Patch admin-username in keycloak-admin-credentials Secret template
-    ansible.builtin.replace:
-      path: "{{ _ocp4_workload_osac_kc_resources }}"
-      regexp: '(admin-username:\s+)admin'
-      replace: '\g<1>{{ ocp4_workload_osac_admin_user }}'
+  # - name: Patch admin-username in keycloak-admin-credentials Secret template
+  #   ansible.builtin.replace:
+  #     path: "{{ _ocp4_workload_osac_kc_resources }}"
+  #     regexp: '(admin-username:\s+)admin'
+  #     replace: '\g<1>{{ ocp4_workload_osac_admin_user }}'
 
-  - name: Patch admin-password in keycloak-admin-credentials Secret template
-    ansible.builtin.replace:
-      path: "{{ _ocp4_workload_osac_kc_resources }}"
-      regexp: '(admin-password:\s+)admin'
-      replace: '\g<1>{{ _ocp4_workload_osac_admin_password }}'
+  # - name: Patch admin-password in keycloak-admin-credentials Secret template
+  #   ansible.builtin.replace:
+  #     path: "{{ _ocp4_workload_osac_kc_resources }}"
+  #     regexp: '(admin-password:\s+)admin'
+  #     replace: '\g<1>{{ _ocp4_workload_osac_admin_password }}'
 
-  - name: Patch default-user-password in keycloak-admin-credentials Secret template
-    ansible.builtin.replace:
-      path: "{{ _ocp4_workload_osac_kc_resources }}"
-      regexp: '(default-user-password:\s+)\S+'
-      replace: '\g<1>{{ _ocp4_workload_osac_user_password }}'
+  # - name: Patch default-user-password in keycloak-admin-credentials Secret template
+  #   ansible.builtin.replace:
+  #     path: "{{ _ocp4_workload_osac_kc_resources }}"
+  #     regexp: '(default-user-password:\s+)\S+'
+  #     replace: '\g<1>{{ _ocp4_workload_osac_user_password }}'
 
-  - name: Patch admin username in set-passwords script
-    ansible.builtin.replace:
-      path: "{{ _ocp4_workload_osac_kc_resources }}"
-      regexp: "-d 'username=admin'"
-      replace: "-d 'username={{ ocp4_workload_osac_admin_user }}'"
+  # - name: Patch admin username in set-passwords script
+  #   ansible.builtin.replace:
+  #     path: "{{ _ocp4_workload_osac_kc_resources }}"
+  #     regexp: "-d 'username=admin'"
+  #     replace: "-d 'username={{ ocp4_workload_osac_admin_user }}'"
 
-  - name: Patch admin password in set-passwords script
-    ansible.builtin.replace:
-      path: "{{ _ocp4_workload_osac_kc_resources }}"
-      regexp: "-d 'password=admin'"
-      replace: "-d 'password={{ _ocp4_workload_osac_admin_password }}'"
+  # - name: Patch admin password in set-passwords script
+  #   ansible.builtin.replace:
+  #     path: "{{ _ocp4_workload_osac_kc_resources }}"
+  #     regexp: "-d 'password=admin'"
+  #     replace: "-d 'password={{ _ocp4_workload_osac_admin_password }}'"
 
-  - name: Patch user passwords in set-passwords script
-    ansible.builtin.replace:
-      path: "{{ _ocp4_workload_osac_kc_resources }}"
-      regexp: '"foobar"'
-      replace: '"{{ _ocp4_workload_osac_user_password }}"'
+  # - name: Patch user passwords in set-passwords script
+  #   ansible.builtin.replace:
+  #     path: "{{ _ocp4_workload_osac_kc_resources }}"
+  #     regexp: '"foobar"'
+  #     replace: '"{{ _ocp4_workload_osac_user_password }}"'
 
   - name: Copy AAP license from Execution Environment to the Installer directory
     ansible.builtin.copy:
