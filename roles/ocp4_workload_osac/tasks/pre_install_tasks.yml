@@ -167,11 +167,23 @@
       _ocp4_workload_osac_kc_resources: >-
         ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-prereqs/templates/keycloak/resources.yaml
 
-  - name: Patch Keycloak admin credentials in chart
+  - name: Patch admin-username in keycloak-admin-credentials Secret template
     ansible.builtin.replace:
       path: "{{ _ocp4_workload_osac_kc_resources }}"
-      regexp: '(name: KEYCLOAK_ADMIN\n\s+value: )admin(\n\s+- name: KEYCLOAK_ADMIN_PASSWORD\n\s+value: )admin'
-      replace: '\g<1>{{ ocp4_workload_osac_admin_user }}\g<2>{{ _ocp4_workload_osac_admin_password }}'
+      regexp: '(admin-username:\s+)admin'
+      replace: '\g<1>{{ ocp4_workload_osac_admin_user }}'
+
+  - name: Patch admin-password in keycloak-admin-credentials Secret template
+    ansible.builtin.replace:
+      path: "{{ _ocp4_workload_osac_kc_resources }}"
+      regexp: '(admin-password:\s+)admin'
+      replace: '\g<1>{{ _ocp4_workload_osac_admin_password }}'
+
+  - name: Patch default-user-password in keycloak-admin-credentials Secret template
+    ansible.builtin.replace:
+      path: "{{ _ocp4_workload_osac_kc_resources }}"
+      regexp: '(default-user-password:\s+)\S+'
+      replace: '\g<1>{{ _ocp4_workload_osac_user_password }}'
 
   - name: Patch admin username in set-passwords script
     ansible.builtin.replace:
