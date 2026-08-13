@@ -14,3 +14,10 @@
         ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/{{ ocp4_workload_osac_installer_values_file }}
       regexp: '(lvms:\n\s+enabled:\s+)\w+'
       replace: '\g<1>{{ ocp4_workload_osac_lvms_enabled | lower }}'
+
+  - name: Set osac-ui image tag to main
+    ansible.builtin.replace:
+      path: >-
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/{{ ocp4_workload_osac_installer_values_file }}
+      regexp: '(ghcr\.io/osac-project/osac-ui:)\S+'
+      replace: '\g<1>main'
