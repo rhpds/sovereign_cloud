@@ -40,8 +40,8 @@
     object: "{{ ocp4_workload_osac_aap_license_s3_url | urlsplit('path') | regex_replace('^/', '') }}"
     dest: /tmp/aap-license.zip
     mode: get
-    access_key: "{{ ocp4_workload_osac_aap_license_s3_access_key_id }}"
-    secret_key: "{{ ocp4_workload_osac_aap_license_s3_secret_access_key }}"
+    aws_access_key: "{{ ocp4_workload_osac_aap_license_s3_access_key_id }}"
+    aws_secret_key: "{{ ocp4_workload_osac_aap_license_s3_secret_access_key }}"
     region: >-
       {{ ocp4_workload_osac_aap_license_s3_url | urlsplit('hostname')
           | regex_replace('^.*\.s3\.([^.]+)\.amazonaws\.com$', '\1') }}
