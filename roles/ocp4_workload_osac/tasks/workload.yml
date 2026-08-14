@@ -23,7 +23,7 @@
   delegate_to: "{{ _bastion_host }}"
   ansible.builtin.shell:
     cmd: >-
-      nohup bash -c '
+      nohup bash -lc '
       set -o pipefail;
       make install-operators
       VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
@@ -75,7 +75,7 @@
   delegate_to: "{{ _bastion_host }}"
   ansible.builtin.shell:
     cmd: >-
-      nohup bash -c '
+      nohup bash -lc '
       set -o pipefail;
       make install-prereqs
       VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
@@ -106,7 +106,7 @@
   delegate_to: "{{ _bastion_host }}"
   ansible.builtin.shell:
     cmd: >-
-      nohup bash -c '
+      nohup bash -lc '
       set -o pipefail;
       make install-osac
       VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
