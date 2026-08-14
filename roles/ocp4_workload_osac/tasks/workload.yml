@@ -12,37 +12,10 @@
   ansible.builtin.include_tasks: setup_values.yml
 
 # ponytail: no async — async+delegate_to is broken in AAP; tee keeps SSH alive
-- name: "DEBUG: Check oc connectivity on bastion via delegate_to"
-  delegate_to: "{{ _bastion_host }}"
-  ansible.builtin.shell:
-    cmd: |
-      echo "=== whoami: $(whoami) ==="
-      echo "=== HOME=$HOME ==="
-      echo "=== KUBECONFIG=${KUBECONFIG:-not set} ==="
-      echo "=== HTTP_PROXY=${HTTP_PROXY:-not set} ==="
-      echo "=== HTTPS_PROXY=${HTTPS_PROXY:-not set} ==="
-      echo "=== http_proxy=${http_proxy:-not set} ==="
-      echo "=== https_proxy=${https_proxy:-not set} ==="
-      echo "=== NO_PROXY=${NO_PROXY:-not set} ==="
-      echo "=== K8S_AUTH_KUBECONFIG=${K8S_AUTH_KUBECONFIG:-not set} ==="
-      echo "=== oc location: $(which oc 2>&1) ==="
-      echo "=== kubeconfig exists: $(ls -la ~/.kube/config 2>&1) ==="
-      echo "=== oc get --raw /version output: ==="
-      oc get --raw /version 2>&1 || true
-      echo "=== API server from kubeconfig: ==="
-      grep server ~/.kube/config 2>&1 | head -1 || true
-      echo "=== curl to API server: ==="
-      API=$(grep server ~/.kube/config | head -1 | awk '{print $2}')
-      curl -sk --connect-timeout 5 "${API}/version" 2>&1 | head -5 || true
-  register: r_debug_oc
-  changed_when: false
-
-- name: "DEBUG: Show oc connectivity results"
-  ansible.builtin.debug:
-    var: r_debug_oc.stdout_lines
-
 - name: "OSAC Phase 1: Install operators"
   delegate_to: "{{ _bastion_host }}"
+  environment:
+    KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
   ansible.builtin.shell:
     cmd: >-
       set -o pipefail;
@@ -76,6 +49,8 @@
 
 - name: "OSAC Phase 2: Install prerequisites"
   delegate_to: "{{ _bastion_host }}"
+  environment:
+    KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
   ansible.builtin.shell:
     cmd: >-
       set -o pipefail;
@@ -88,6 +63,8 @@
 
 - name: "OSAC Phase 3: Install OSAC"
   delegate_to: "{{ _bastion_host }}"
+  environment:
+    KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
   ansible.builtin.shell:
     cmd: >-
       set -o pipefail;
