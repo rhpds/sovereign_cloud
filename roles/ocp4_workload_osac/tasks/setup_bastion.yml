@@ -23,20 +23,6 @@
     ansible.builtin.set_fact:
       _bastion_host: "{{ bastion_ansible_host }}"
 
-  - name: Print inventory
-    ansible.builtin.debug:
-      msg: |
-        === Ansible Inventory ===
-        All groups: {{ groups.keys() | list }}
-        {% for group in groups %}
-        [{{ group }}]
-        {% for host in groups[group] %}
-          {{ host }} | ansible_host={{ hostvars[host].ansible_host | default('N/A') }} | ansible_user={{ hostvars[host].ansible_user | default('N/A') }} | ansible_port={{ hostvars[host].ansible_port | default(22) }}
-        {% endfor %}
-        {% endfor %}
-        === Current play host: {{ inventory_hostname | default('NOT SET') }} ===
-        === Bastion host: {{ _bastion_host | default('NOT SET') }} ===
-
 - name: Abort install if no bastion available
   when: _bastion_host is not defined
   ansible.builtin.debug:
