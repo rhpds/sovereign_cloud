@@ -11,44 +11,18 @@
 - name: Call setup_values.yml
   ansible.builtin.include_tasks: setup_values.yml
 
-# ponytail: nohup+poll pattern — async+delegate_to is broken in AAP
-- name: Clean up stale OSAC phase marker files
-  delegate_to: "{{ _bastion_host }}"
-  ansible.builtin.file:
-    path: "/tmp/.osac_phase{{ item }}.rc"
-    state: absent
-  loop: [1, 2, 3]
-
-- name: "OSAC Phase 1: Start operators install"
+# ponytail: no async — async+delegate_to is broken in AAP; tee keeps SSH alive
+- name: "OSAC Phase 1: Install operators"
   delegate_to: "{{ _bastion_host }}"
   ansible.builtin.shell:
     cmd: >-
-      nohup bash -lc '
       set -o pipefail;
       make install-operators
       VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
       INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
-      2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log;
-      echo $? > /tmp/.osac_phase1.rc
-      ' > /dev/null 2>&1 &
+      2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
     chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
   changed_when: true
-
-- name: "OSAC Phase 1: Wait for operators install to complete"
-  delegate_to: "{{ _bastion_host }}"
-  ansible.builtin.stat:
-    path: /tmp/.osac_phase1.rc
-  register: r_phase1_rc
-  until: r_phase1_rc.stat.exists
-  retries: 120
-  delay: 30
-
-- name: "OSAC Phase 1: Verify operators install succeeded"
-  delegate_to: "{{ _bastion_host }}"
-  ansible.builtin.slurp:
-    src: /tmp/.osac_phase1.rc
-  register: r_phase1_result
-  failed_when: (r_phase1_result.content | b64decode | trim) != '0'
 
 - name: Wait for operators to be ready
   kubernetes.core.k8s_info:
@@ -71,67 +45,29 @@
   retries: 60
   delay: 30
 
-- name: "OSAC Phase 2: Start prerequisites install"
+- name: "OSAC Phase 2: Install prerequisites"
   delegate_to: "{{ _bastion_host }}"
   ansible.builtin.shell:
     cmd: >-
-      nohup bash -lc '
       set -o pipefail;
       make install-prereqs
       VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
       INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
-      2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log;
-      echo $? > /tmp/.osac_phase2.rc
-      ' > /dev/null 2>&1 &
+      2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
     chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
   changed_when: true
 
-- name: "OSAC Phase 2: Wait for prerequisites install to complete"
-  delegate_to: "{{ _bastion_host }}"
-  ansible.builtin.stat:
-    path: /tmp/.osac_phase2.rc
-  register: r_phase2_rc
-  until: r_phase2_rc.stat.exists
-  retries: 120
-  delay: 30
-
-- name: "OSAC Phase 2: Verify prerequisites install succeeded"
-  delegate_to: "{{ _bastion_host }}"
-  ansible.builtin.slurp:
-    src: /tmp/.osac_phase2.rc
-  register: r_phase2_result
-  failed_when: (r_phase2_result.content | b64decode | trim) != '0'
-
-- name: "OSAC Phase 3: Start OSAC install"
+- name: "OSAC Phase 3: Install OSAC"
   delegate_to: "{{ _bastion_host }}"
   ansible.builtin.shell:
     cmd: >-
-      nohup bash -lc '
       set -o pipefail;
       make install-osac
       VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
       INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
-      2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log;
-      echo $? > /tmp/.osac_phase3.rc
-      ' > /dev/null 2>&1 &
+      2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
     chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
   changed_when: true
-
-- name: "OSAC Phase 3: Wait for OSAC install to complete"
-  delegate_to: "{{ _bastion_host }}"
-  ansible.builtin.stat:
-    path: /tmp/.osac_phase3.rc
-  register: r_phase3_rc
-  until: r_phase3_rc.stat.exists
-  retries: 120
-  delay: 30
-
-- name: "OSAC Phase 3: Verify OSAC install succeeded"
-  delegate_to: "{{ _bastion_host }}"
-  ansible.builtin.slurp:
-    src: /tmp/.osac_phase3.rc
-  register: r_phase3_result
-  failed_when: (r_phase3_result.content | b64decode | trim) != '0'
 
 - name: Call post_install_fixes.yml
   ansible.builtin.include_tasks: post_install_fixes.yml
