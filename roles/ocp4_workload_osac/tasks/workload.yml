@@ -12,7 +12,7 @@
   ansible.builtin.include_tasks: setup_values.yml
 
 - name: "OSAC Phase 1: Install operators"
-  delegate_to: "{{ _bastion_host }}"
+  delegate_to: "{{hostvars['localhost']._bastion_host}}"
   ansible.builtin.shell:
     cmd: >-
       set -o pipefail;
@@ -47,7 +47,7 @@
   delay: 30
 
 - name: "OSAC Phase 2: Install prerequisites"
-  delegate_to: "{{ _bastion_host }}"
+  delegate_to: "{{hostvars['localhost']._bastion_host}}"
   ansible.builtin.shell:
     cmd: >-
       set -o pipefail;
@@ -61,7 +61,7 @@
   poll: 30
 
 - name: "OSAC Phase 3: Install OSAC"
-  delegate_to: "{{ _bastion_host }}"
+  delegate_to: "{{hostvars['localhost']._bastion_host}}"
   ansible.builtin.shell:
     cmd: >-
       set -o pipefail;
