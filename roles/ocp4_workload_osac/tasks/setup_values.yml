@@ -15,6 +15,14 @@
       regexp: '(lvms:\n\s+enabled:\s+)\w+'
       replace: '\g<1>{{ ocp4_workload_osac_lvms_enabled | lower }}'
 
+  - name: Disable cert-manager OLM deployment in operators chart (pre-installed via platform)
+    when: not ocp4_workload_osac_cert_manager_enabled | bool
+    ansible.builtin.replace:
+      path: >-
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/{{ ocp4_workload_osac_installer_values_file }}
+      regexp: '(certManager:\n\s+enabled:\s+)\w+'
+      replace: '\g<1>false'
+
   - name: Set osac-ui image tag to main
     ansible.builtin.replace:
       path: >-

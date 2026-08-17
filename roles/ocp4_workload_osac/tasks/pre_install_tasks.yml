@@ -1,5 +1,6 @@
 ---
 - name: Remove pre-existing cert-manager OperatorGroup to avoid conflict with Helm deploy
+  when: ocp4_workload_osac_cert_manager_enabled | bool
   kubernetes.core.k8s:
     state: absent
     api_version: operators.coreos.com/v1
@@ -9,6 +10,7 @@
   failed_when: false
 
 - name: Adopt pre-existing cert-manager namespaces for Helm
+  when: ocp4_workload_osac_cert_manager_enabled | bool
   kubernetes.core.k8s:
     state: patched
     api_version: v1
@@ -131,6 +133,7 @@
       insertbefore: BOF
 
   - name: Patch Makefile to add --take-ownership to helm upgrade calls
+    when: ocp4_workload_osac_cert_manager_enabled | bool
     ansible.builtin.replace:
       path: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/Makefile"
       regexp: '--timeout'
