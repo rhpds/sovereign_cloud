@@ -313,7 +313,32 @@
             name: default-ca
         - useDefaultCAs: true
 
-- name: Restart OSAC UI and fulfillment services
+# The fulfillment-api route is passthrough by default, presenting the service-CA
+# signed cert that browsers don't trust.  Switch to reencrypt so the OpenShift
+# router (which holds the cluster wildcard cert) terminates TLS for the browser.
+- name: Read OpenShift service CA cert
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: ConfigMap
+    name: openshift-service-ca.crt
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+  register: r_service_ca_cm
+
+- name: Convert fulfillment-api route from passthrough to reencrypt
+  kubernetes.core.k8s:
+    state: patched
+    api_version: route.openshift.io/v1
+    kind: Route
+    name: fulfillment-api
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    definition:
+      spec:
+        tls:
+          termination: reencrypt
+          insecureEdgeTerminationPolicy: Redirect
+          destinationCACertificate: "{{ r_service_ca_cm.resources[0].data['service-ca.crt'] }}"
+
+- name: Restart OSAC UI, fulfillment ingress proxy, and fulfillment gRPC server
   kubernetes.core.k8s:
     state: patched
     api_version: apps/v1
@@ -328,7 +353,7 @@
               kubectl.kubernetes.io/restartedAt: "{{ now(utc=true).isoformat() }}"
   loop:
   - osac-ui
-  - fulfillment-controller
+  - fulfillment-ingress-proxy
   - fulfillment-grpc-server
 
 - name: Wait for OSAC UI rollout
