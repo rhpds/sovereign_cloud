@@ -1,0 +1,338 @@
+---
+# ------------------------------------------------
+# Make sure OSAC is deployed
+# ------------------------------------------------
+- name: Get OSAC UI Route URL
+  kubernetes.core.k8s_info:
+    api_version: route.openshift.io/v1
+    kind: Route
+    name: osac-ui
+    namespace: "{{ ocp4_workload_osac_demo_namespace }}"
+  register: r_osac_ui_route
+
+- name: Assert that OSAC Route URL exists
+  ansible.builtin.assert:
+    that:
+    - r_osac_ui_route.resources | length > 0
+    fail_msg: "OSAC UI Route URL not found"
+    success_msg: "OSAC UI Route URL found"
+
+# ------------------------------------------------
+# Discover cluster endpoints
+# ------------------------------------------------
+- name: Set Keycloak URL
+  ansible.builtin.set_fact:
+    _ocp4_workload_osac_demo_kc_url: >-
+      https://keycloak-keycloak.{{ openshift_cluster_ingress_domain }}
+    _ocp4_workload_osac_demo_fulfillment_internal: >-
+      https://fulfillment-internal-api-{{ ocp4_workload_osac_demo_namespace }}.{{ openshift_cluster_ingress_domain }}
+
+# ------------------------------------------------
+# 2. Create demo tenant (hub CR + storage)
+# ------------------------------------------------
+- name: Create demo tenant namespace
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: "{{ ocp4_workload_osac_demo_tenant_name }}"
+
+- name: Create hub Tenant CR
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: osac.openshift.io/v1alpha1
+      kind: Tenant
+      metadata:
+        name: "{{ ocp4_workload_osac_demo_tenant_name }}"
+        namespace: "{{ ocp4_workload_osac_demo_namespace }}"
+      spec: {}
+
+- name: Create VAST stub secret for demo tenant
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "vast-tenant-config-{{ ocp4_workload_osac_demo_tenant_name }}"
+        namespace: "{{ ocp4_workload_osac_demo_namespace }}"
+        labels:
+          osac.openshift.io/tenant: "{{ ocp4_workload_osac_demo_tenant_name }}"
+      type: Opaque
+      data: {}
+
+- name: Wait for demo tenant to be ready
+  kubernetes.core.k8s_info:
+    api_version: osac.openshift.io/v1alpha1
+    kind: Tenant
+    name: "{{ ocp4_workload_osac_demo_tenant_name }}"
+    namespace: "{{ ocp4_workload_osac_demo_namespace }}"
+  register: r_demo_tenant
+  until:
+  - r_demo_tenant.resources | length > 0
+  - r_demo_tenant.resources[0].status.phase | default('') == 'Ready'
+  retries: 30
+  delay: 10
+
+- name: Patch demo tenant storage class status
+  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
+  ansible.builtin.command:
+    cmd: >-
+      oc patch tenant {{ ocp4_workload_osac_demo_tenant_name }}
+      -n {{ ocp4_workload_osac_demo_namespace }}
+      --type=merge
+      --subresource=status
+      -p '{"status":{"storageClasses":[{"name":"{{ ocp4_workload_osac_demo_storage_class }}","tier":"default"}]}}'
+  changed_when: true
+
+# ------------------------------------------------
+# 3. Add tenant users to Keycloak organization
+# ------------------------------------------------
+# yamllint disable rule:line-length
+- name: Configure Keycloak organization and tenant users
+  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      KC_URL="{{ _ocp4_workload_osac_demo_kc_url }}"
+      REALM=osac
+      ORG="{{ ocp4_workload_osac_demo_tenant_name }}"
+
+      for i in $(seq 1 10); do
+        RESP=$(curl -sk -X POST \
+          "${KC_URL}/realms/master/protocol/openid-connect/token" \
+          -d "grant_type=password&client_id=admin-cli&username={{ ocp4_workload_osac_demo_admin_user }}&password={{ ocp4_workload_osac_demo_admin_password }}")
+        TOKEN=$(echo "$RESP" | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])' 2>/dev/null) && break
+        sleep 5
+      done
+      if [ -z "${TOKEN:-}" ]; then
+        echo "Failed to get Keycloak admin token" >&2
+        exit 1
+      fi
+
+      # Find or create the Keycloak organization
+      ORG_ID=$(curl -sk -H "Authorization: Bearer ${TOKEN}" \
+        "${KC_URL}/admin/realms/${REALM}/organizations?search=${ORG}&exact=true" \
+        | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d[0]["id"] if d else "")' 2>/dev/null)
+
+      if [ -z "${ORG_ID}" ]; then
+        curl -sk -X POST \
+          -H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json" \
+          "${KC_URL}/admin/realms/${REALM}/organizations" \
+          -d "{\"name\": \"${ORG}\", \"enabled\": true}"
+        ORG_ID=$(curl -sk -H "Authorization: Bearer ${TOKEN}" \
+          "${KC_URL}/admin/realms/${REALM}/organizations?search=${ORG}&exact=true" \
+          | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d[0]["id"] if d else "")' 2>/dev/null)
+        echo "created organization ${ORG} (${ORG_ID})"
+      else
+        echo "organization ${ORG} already exists (${ORG_ID})"
+      fi
+
+      if [ -z "${ORG_ID}" ]; then
+        echo "Failed to create or find organization '${ORG}'" >&2
+        exit 1
+      fi
+
+      # Add each tenant user to the org
+      {% for user in ocp4_workload_osac_demo_tenant_users %}
+      USER_ID=$(curl -sk -H "Authorization: Bearer ${TOKEN}" \
+        "${KC_URL}/admin/realms/${REALM}/users?username={{ user }}&exact=true" \
+        | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d[0]["id"] if d else "")' 2>/dev/null)
+      if [ -n "${USER_ID}" ]; then
+        curl -sk -X POST \
+          -H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json" \
+          "${KC_URL}/admin/realms/${REALM}/organizations/${ORG_ID}/members" \
+          -d "\"${USER_ID}\""
+        echo "added {{ user }} to ${ORG}"
+      else
+        echo "WARNING: user {{ user }} not found in Keycloak" >&2
+      fi
+      {% endfor %}
+
+      # Ensure organization scope is a default scope on osac-ui client
+      UI_CID=$(curl -sk -H "Authorization: Bearer ${TOKEN}" \
+        "${KC_URL}/admin/realms/${REALM}/clients?clientId=osac-ui" \
+        | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d[0]["id"] if d else "")' 2>/dev/null)
+      ORG_SCOPE_ID=$(curl -sk -H "Authorization: Bearer ${TOKEN}" \
+        "${KC_URL}/admin/realms/${REALM}/client-scopes" \
+        | python3 -c "import sys,json; [print(s['id']) for s in json.load(sys.stdin) if s['name']=='organization']" 2>/dev/null)
+
+      if [ -n "${UI_CID}" ] && [ -n "${ORG_SCOPE_ID}" ]; then
+        curl -sk -X DELETE -H "Authorization: Bearer ${TOKEN}" \
+          "${KC_URL}/admin/realms/${REALM}/clients/${UI_CID}/optional-client-scopes/${ORG_SCOPE_ID}" 2>/dev/null || true
+        curl -sk -X PUT -H "Authorization: Bearer ${TOKEN}" \
+          "${KC_URL}/admin/realms/${REALM}/clients/${UI_CID}/default-client-scopes/${ORG_SCOPE_ID}"
+        echo "organization scope set as default on osac-ui"
+      fi
+  changed_when: true
+# yamllint enable rule:line-length
+
+# ------------------------------------------------
+# 4. PublicIPPool (conditional)
+# ------------------------------------------------
+- name: Create PublicIPPool
+  when: ocp4_workload_osac_demo_public_ip_cidr | length > 0
+  block:
+  - name: Create PublicIPPool via private API
+    delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
+    ansible.builtin.shell:
+      cmd: |
+        set -euo pipefail
+        TOKEN=$(oc create token -n {{ ocp4_workload_osac_demo_namespace }} admin)
+        RESP=$(curl -sk -X POST \
+          "{{ _ocp4_workload_osac_demo_fulfillment_internal }}/api/private/v1/public_ip_pools" \
+          -H "Authorization: Bearer ${TOKEN}" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "metadata": { "name": "{{ ocp4_workload_osac_demo_public_ip_pool_name }}" },
+            "spec": {
+              "cidrs": ["{{ ocp4_workload_osac_demo_public_ip_cidr }}"],
+              "ipFamily": "IP_FAMILY_IPV4"
+            }
+          }')
+        echo "${RESP}"
+    changed_when: true
+    register: r_publicippool
+
+  - name: Wait for PublicIPPool CR to appear
+    kubernetes.core.k8s_info:
+      api_version: osac.openshift.io/v1alpha1
+      kind: PublicIPPool
+      namespace: "{{ ocp4_workload_osac_demo_namespace }}"
+    register: r_pip_cr
+    until: r_pip_cr.resources | length > 0
+    retries: 30
+    delay: 10
+
+  - name: Patch implementationStrategy on PublicIPPool CR (WA-5a)
+    kubernetes.core.k8s:
+      state: patched
+      api_version: osac.openshift.io/v1alpha1
+      kind: PublicIPPool
+      name: "{{ r_pip_cr.resources[0].metadata.name }}"
+      namespace: "{{ ocp4_workload_osac_demo_namespace }}"
+      definition:
+        spec:
+          implementationStrategy: metallb-l2
+
+  - name: Wait for PublicIPPool CR to reach Ready
+    kubernetes.core.k8s_info:
+      api_version: osac.openshift.io/v1alpha1
+      kind: PublicIPPool
+      name: "{{ r_pip_cr.resources[0].metadata.name }}"
+      namespace: "{{ ocp4_workload_osac_demo_namespace }}"
+    register: r_pip_ready
+    until:
+    - r_pip_ready.resources | length > 0
+    - r_pip_ready.resources[0].status.phase | default('') == 'Ready'
+    retries: 30
+    delay: 10
+    failed_when: false
+
+  - name: Patch PublicIPPool CR status if not Ready (WA-5b)
+    when: r_pip_ready.resources[0].status.phase | default('') != 'Ready'
+    block:
+    - name: Set PublicIPPool CR to unmanaged
+      kubernetes.core.k8s:
+        state: patched
+        api_version: osac.openshift.io/v1alpha1
+        kind: PublicIPPool
+        name: "{{ r_pip_cr.resources[0].metadata.name }}"
+        namespace: "{{ ocp4_workload_osac_demo_namespace }}"
+        definition:
+          metadata:
+            annotations:
+              osac.openshift.io/management-state: unmanaged
+
+    - name: Patch PublicIPPool CR status to Ready
+      delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
+      ansible.builtin.command:
+        cmd: >-
+          oc patch publicippool {{ r_pip_cr.resources[0].metadata.name }}
+          -n {{ ocp4_workload_osac_demo_namespace }}
+          --type=merge --subresource=status
+          -p '{"status":{"phase":"Ready","total":6,"available":6}}'
+      changed_when: true
+
+  - name: Sync PublicIPPool fulfillment API state to READY (WA-5c)
+    delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
+    ansible.builtin.shell:
+      cmd: |
+        set -euo pipefail
+        TOKEN=$(oc create token -n {{ ocp4_workload_osac_demo_namespace }} admin)
+        POOL_ID=$(curl -sk -H "Authorization: Bearer ${TOKEN}" \
+          "{{ _ocp4_workload_osac_demo_fulfillment_internal }}/api/private/v1/public_ip_pools" \
+          | python3 -c "
+        import sys, json
+        data = json.load(sys.stdin)
+        for item in data.get('items', []):
+            if item.get('metadata', {}).get('name') == '{{ ocp4_workload_osac_demo_public_ip_pool_name }}':
+                print(item['id'])
+                break
+        ")
+        if [ -n "${POOL_ID}" ]; then
+          curl -sk -X PATCH \
+            "{{ _ocp4_workload_osac_demo_fulfillment_internal }}/api/private/v1/public_ip_pools/${POOL_ID}" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"status":{"state":"PUBLIC_IP_POOL_STATE_READY"}}'
+          echo "synced pool ${POOL_ID} to READY"
+        fi
+    changed_when: true
+
+# ------------------------------------------------
+# 5. Create InstanceType and CatalogItem
+# ------------------------------------------------
+- name: Create demo resources on bastion
+  delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
+  block:
+  - name: Write InstanceType YAML
+    ansible.builtin.template:
+      src: demo-instancetype.yaml.j2
+      dest: /tmp/demo-instancetype.yaml
+      mode: "0644"
+
+  - name: Write CatalogItem YAML
+    ansible.builtin.template:
+      src: demo-catalogitem.yaml.j2
+      dest: /tmp/demo-catalogitem.yaml
+      mode: "0644"
+
+  - name: Create InstanceType and CatalogItem via osac CLI
+    ansible.builtin.shell:
+      cmd: |
+        set -euo pipefail
+        osac login --insecure --private \
+          --token-script "oc create token -n {{ ocp4_workload_osac_demo_namespace }} admin" \
+          --address "{{ _ocp4_workload_osac_demo_fulfillment_internal }}"
+
+        osac create -f /tmp/demo-instancetype.yaml 2>&1
+        osac create -f /tmp/demo-catalogitem.yaml 2>&1
+
+        echo "=== Verify ==="
+        osac get instancetype {{ ocp4_workload_osac_demo_instance_type_name }}
+        osac get computeinstancecatalogitem {{ ocp4_workload_osac_demo_catalog_item_name }}
+    changed_when: true
+
+  - name: Clean up temp files
+    ansible.builtin.file:
+      path: "{{ item }}"
+      state: absent
+    loop:
+    - /tmp/demo-instancetype.yaml
+    - /tmp/demo-catalogitem.yaml
+
+# ------------------------------------------------
+# 6. Save demo info to user data
+# ------------------------------------------------
+- name: Save demo tenant info to user data
+  agnosticd.core.agnosticd_user_info:
+    data:
+      osac_demo_tenant: "{{ ocp4_workload_osac_demo_tenant_name }}"
+      osac_demo_tenant_user: "{{ ocp4_workload_osac_demo_tenant_users[0] }}"
+      osac_demo_tenant_password: "{{ ocp4_workload_osac_demo_user_password }}"
+      osac_demo_instance_type: "{{ ocp4_workload_osac_demo_instance_type_name }}"
+      osac_demo_catalog_item: "{{ ocp4_workload_osac_demo_catalog_item_name }}"

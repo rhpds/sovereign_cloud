@@ -1,0 +1,18 @@
+---
+galaxy_info:
+  role_name: ocp4_workload_osac_demo
+  author: Red Hat, Wolfgang Kulhanek (wkulhane@redhat.com)
+  description: |
+    Set up Demo 3 VMaaS prerequisites on an OSAC platform:
+    tenant, PublicIPPool, InstanceType, CatalogItem.
+  license: MIT
+  min_ansible_version: "2.9"
+  platforms:
+  - name: EL
+    versions:
+    - all
+  galaxy_tags:
+  - ocp
+  - openshift
+  - osac
+dependencies: []

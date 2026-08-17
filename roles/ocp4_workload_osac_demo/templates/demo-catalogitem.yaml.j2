@@ -1,0 +1,36 @@
+"@type": type.googleapis.com/osac.private.v1.ComputeInstanceCatalogItem
+metadata:
+  name: {{ ocp4_workload_osac_demo_catalog_item_name }}
+title: Demo Linux VM
+description: Small Fedora Linux VM for Demo 3 VMaaS lifecycle.
+template: osac.templates.ocp_virt_vm
+published: true
+field_definitions:
+- path: ssh_key
+  display_name: SSH public key
+  editable: true
+- path: image.source_type
+  display_name: Image source type
+  editable: true
+  default: registry
+- path: image.source_ref
+  display_name: Container disk image
+  editable: true
+  default: quay.io/containerdisks/fedora:latest
+- path: boot_disk.size_gib
+  display_name: Boot disk (GiB)
+  editable: true
+  default: 10
+- path: instance_type
+  display_name: Instance type
+  editable: true
+- path: run_strategy
+  display_name: Run strategy
+  editable: true
+  default: Always
+- path: user_data
+  display_name: Cloud-init user data
+  editable: true
+- path: network_attachments
+  display_name: Network attachments
+  editable: true

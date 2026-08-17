@@ -1,0 +1,17 @@
+---
+galaxy_info:
+  role_name: ocp4_workload_osac
+  author: Red Hat, Wolfgang Kulhanek (wkulhane@redhat.com)
+  description: |
+    Deploy OSAC (Open Sovereign Architecture Cloud) platform
+    providing VMaaS and CaaS on OpenShift.
+  license: MIT
+  min_ansible_version: "2.9"
+  platforms:
+  - name: EL
+    versions:
+    - all
+  galaxy_tags:
+  - ocp
+  - openshift
+dependencies: []

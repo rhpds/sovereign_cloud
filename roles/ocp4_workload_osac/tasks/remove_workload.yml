@@ -1,0 +1,6 @@
+---
+- name: OSAC workload removal not supported
+  ansible.builtin.debug:
+    msg: >-
+      Removal of the OSAC workload is not supported.
+      Manual cleanup is required.

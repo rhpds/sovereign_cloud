@@ -1,0 +1,6 @@
+---
+- name: Removal not supported
+  ansible.builtin.debug:
+    msg: >-
+      Removal of the OSAC demo workload is not supported.
+      Manual cleanup is required.

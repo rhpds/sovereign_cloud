@@ -1,0 +1,40 @@
+---
+- name: Set values file path
+  ansible.builtin.set_fact:
+    ocp4_workload_osac_installer_values_file: >-
+      {{ ocp4_workload_osac_installer_values_directory }}/values.yaml
+
+- name: Modify values file
+  delegate_to: "{{ _bastion_host }}"
+  block:
+  - name: Set LVMS enabled state in values file
+    when: not ocp4_workload_osac_lvms_enabled | bool
+    ansible.builtin.replace:
+      path: >-
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/{{ ocp4_workload_osac_installer_values_file }}
+      regexp: '(lvms:\n\s+enabled:\s+)\w+'
+      replace: '\g<1>{{ ocp4_workload_osac_lvms_enabled | lower }}'
+
+  - name: Set osac-ui image tag to main
+    ansible.builtin.replace:
+      path: >-
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/{{ ocp4_workload_osac_installer_values_file }}
+      regexp: '(ghcr\.io/osac-project/osac-ui:)\S+'
+      replace: '\g<1>main'
+
+  - name: Set Keycloak admin credentials in values file
+    ansible.builtin.lineinfile:
+      path: >-
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/{{ ocp4_workload_osac_installer_values_file }}
+      insertafter: '^keycloak:'
+      regexp: '^\s+{{ item.key }}:'
+      line: '  {{ item.key }}: {{ item.value }}'
+    loop:
+    - key: adminUsername
+      value: "{{ ocp4_workload_osac_admin_user }}"
+    - key: adminPassword
+      value: "{{ _ocp4_workload_osac_admin_password }}"
+    - key: defaultUserPassword
+      value: "{{ _ocp4_workload_osac_user_password }}"
+    loop_control:
+      label: "{{ item.key }}"

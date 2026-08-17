@@ -1,0 +1,94 @@
+---
+# ------------------------------------------------
+# OSAC (Open Sovereign AI Cloud) Workload
+# ------------------------------------------------
+
+# Installer namespace
+ocp4_workload_osac_namespace: osac
+
+# Installer git repo
+ocp4_workload_osac_repo: https://github.com/osac-project/osac.git
+ocp4_workload_osac_repo_version: main
+ocp4_workload_osac_installer_directory: osac/osac-installer
+# Values directory to use. Available directories: bmaas-ci, caas-ci, development, full-ci, vmaas-ci
+# The directory must contain a values.yaml file.
+ocp4_workload_osac_installer_values_directory: values/vmaas-ci
+
+# Helm binary mirror
+ocp4_workload_osac_helm_mirror: https://mirror.openshift.com/pub/openshift-v4/clients
+
+ocp4_workload_osac_lvms_enabled: false
+
+# ------------------------------------------------
+# OSAC Credentials
+# ------------------------------------------------
+ocp4_workload_osac_admin_user: admin
+ocp4_workload_osac_admin_password: ""
+ocp4_workload_osac_user_password: ""
+
+# ------------------------------------------------
+# osac CLI
+# ------------------------------------------------
+# https://github.com/osac-project/osac/releases/download/fulfillment-service%2Fv0.0.85/osac_Linux_x86_64
+ocp4_workload_osac_cli_version: "v0.0.85"
+
+# ------------------------------------------------
+# Storage class for tenant patching
+# ------------------------------------------------
+ocp4_workload_osac_storage_class: ocs-external-storagecluster-ceph-rbd
+
+# ------------------------------------------------
+# AAP license (required, Ansible-vaulted license.zip)
+# To get a new license file:
+# Step 1: Create a Subscription Allocation
+# - Go to https://access.redhat.com/management/subscription_allocations
+# - Click "Create New subscription allocation"
+# - Name: Give it a descriptive name (e.g., osac-aap-lab)
+# - Type: Select one from the list (e.g. "Satellite 6.14" is known to work)
+# - Click Create
+# Step 2: Add Entitlements
+# - Open your newly created allocation
+# - Go to the "Subscriptions" tab
+# - Click "Add Subscriptions"
+# - Find "Red Hat Ansible Automation Platform" in the list
+# - Add the desired quantity (1 is enough for a lab)
+# Step 3: Export and Download the Manifest
+# - Go to https://console.redhat.com/subscriptions/manifests
+# - Search for your allocation name (e.g., osac-aap-lab), click on it
+# - Click "Export manifest", then download the ZIP file
+# Step 4: Replace the license.zip file in the S3 bucket (below) with the new one
+# ------------------------------------------------
+
+# Log into AWS Infra Prod Account
+# Go to S3 Bucket rhdp-private
+# Upload the license.zip file as osac-aap-license.zip file
+# Get the URL for the file: https://rhdp-private.s3.us-east-1.amazonaws.com/osac-aap-license.zip
+# Go to IAM -> IAM Users
+# Create a new user "s3-osac-aap-license"
+# Select "Attach Policies directly"
+# Create policy "s3-osac-aap-license" with the following JSON:
+
+# {
+#     "Version": "2012-10-17",
+#     "Statement": [
+#         {
+#             "Sid": "VisualEditor0",
+#             "Effect": "Allow",
+#             "Action": "s3:GetObject",
+#             "Resource": "arn:aws:s3:::rhdp-private/osac-aap-license.zip"
+#         },
+#         {
+#             "Sid": "VisualEditor1",
+#             "Effect": "Allow",
+#             "Action": "s3:ListBucket",
+#             "Resource": "arn:aws:s3:::rhdp-private"
+#         }
+#     ]
+# }
+
+# Back at the IAM User Create an Access Key (Use case: Other)
+# Vault the key and put it into the AgV file
+
+ocp4_workload_osac_aap_license_s3_url: https://rhdp-private.s3.us-east-1.amazonaws.com/osac-aap-license.zip
+ocp4_workload_osac_aap_license_s3_access_key_id: ""
+ocp4_workload_osac_aap_license_s3_secret_access_key: ""
