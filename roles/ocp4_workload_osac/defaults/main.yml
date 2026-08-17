@@ -18,6 +18,7 @@ ocp4_workload_osac_installer_values_directory: values/vmaas-ci
 ocp4_workload_osac_helm_mirror: https://mirror.openshift.com/pub/openshift-v4/clients
 
 ocp4_workload_osac_lvms_enabled: false
+ocp4_workload_osac_cert_manager_enabled: false
 
 # ------------------------------------------------
 # OSAC Credentials
