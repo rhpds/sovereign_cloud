@@ -12,7 +12,7 @@
 
 - name: Assert that OSAC Route URL exists
   ansible.builtin.assert:
-    that: 
+    that:
     - r_osac_ui_route.resources | length > 0
     fail_msg: "OSAC UI Route URL not found"
     success_msg: "OSAC UI Route URL found"
@@ -91,6 +91,7 @@
 # ------------------------------------------------
 # 3. Add tenant users to Keycloak organization
 # ------------------------------------------------
+# yamllint disable rule:line-length
 - name: Configure Keycloak organization and tenant users
   delegate_to: "{{ (groups['bastions'] | default(['localhost']))[0] }}"
   ansible.builtin.shell:
@@ -167,6 +168,7 @@
         echo "organization scope set as default on osac-ui"
       fi
   changed_when: true
+# yamllint enable rule:line-length
 
 # ------------------------------------------------
 # 4. PublicIPPool (conditional)
