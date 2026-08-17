@@ -30,43 +30,47 @@
   - clusterrolebinding-hub-access.yaml.j2
 
 # The osac-operator has a race condition that creates duplicate VirtualNetwork CRs
-# (same UUID label, generated names). Detect and remove extras before waiting for
-# Tenant readiness, then re-trigger reconciliation on the remaining CRs.
-- name: Get all VirtualNetwork CRs
+# (same UUID label, generated names). Remove extras and re-trigger reconciliation.
+- name: Remove duplicate VirtualNetwork CRs (osac-operator race condition workaround)
+  ansible.builtin.shell:
+    cmd: |
+      set -o pipefail
+      oc get virtualnetwork -n {{ ocp4_workload_osac_namespace }} -o json | python3 -c '
+      import sys, json, subprocess
+      data = json.load(sys.stdin)
+      ns = "{{ ocp4_workload_osac_namespace }}"
+      seen, dupes = {}, []
+      for vn in sorted(data["items"], key=lambda x: x["metadata"]["creationTimestamp"]):
+          uuid = vn["metadata"]["labels"].get("osac.openshift.io/virtualnetwork-uuid", "")
+          if uuid in seen:
+              dupes.append(vn["metadata"]["name"])
+          else:
+              seen[uuid] = vn["metadata"]["name"]
+      if not dupes:
+          print("no-duplicates")
+          sys.exit(0)
+      for name in dupes:
+          subprocess.run(["oc", "patch", "virtualnetwork", name, "-n", ns,
+              "--type=merge", "-p", json.dumps({"metadata": {"finalizers": []}})],
+              capture_output=True)
+          subprocess.run(["oc", "delete", "virtualnetwork", name, "-n", ns,
+              "--wait", "--timeout=5m"], check=True)
+          print("deleted:" + name)
+      '
+    executable: /bin/bash
+  register: r_vn_dedup
+  changed_when: '"deleted:" in r_vn_dedup.stdout'
+
+- name: Re-trigger reconciliation on remaining VirtualNetworks after duplicate removal
+  when: '"deleted:" in r_vn_dedup.stdout'
   kubernetes.core.k8s_info:
     api_version: osac.openshift.io/v1alpha1
     kind: VirtualNetwork
     namespace: "{{ ocp4_workload_osac_namespace }}"
-  register: r_vns
+  register: r_vns_remaining
 
-- name: Identify duplicate VirtualNetworks to remove (keep first by creationTimestamp)
-  ansible.builtin.set_fact:
-    _duplicate_vns: >-
-      {%- set ns = namespace(seen=[], dupes=[]) -%}
-      {%- for vn in r_vns.resources | sort(attribute='metadata.creationTimestamp') -%}
-        {%- set uuid = vn.metadata.labels['osac.openshift.io/virtualnetwork-uuid'] -%}
-        {%- if uuid in ns.seen -%}
-          {%- set ns.dupes = ns.dupes + [vn.metadata.name] -%}
-        {%- else -%}
-          {%- set ns.seen = ns.seen + [uuid] -%}
-        {%- endif -%}
-      {%- endfor -%}
-      {{ ns.dupes }}
-
-- name: Delete duplicate VirtualNetworks (waiting for AAP deprovisioning to complete)
-  when: _duplicate_vns | length > 0
-  kubernetes.core.k8s:
-    state: absent
-    api_version: osac.openshift.io/v1alpha1
-    kind: VirtualNetwork
-    name: "{{ item }}"
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-    wait: true
-    wait_timeout: 300
-  loop: "{{ _duplicate_vns }}"
-
-- name: Re-trigger reconciliation on remaining VirtualNetworks after duplicate removal
-  when: _duplicate_vns | length > 0
+- name: Annotate remaining VirtualNetworks to trigger reconciliation
+  when: '"deleted:" in r_vn_dedup.stdout'
   kubernetes.core.k8s:
     state: patched
     api_version: osac.openshift.io/v1alpha1
@@ -77,8 +81,7 @@
       metadata:
         annotations:
           reconcile.osac.openshift.io/ts: "{{ now(utc=true).isoformat() }}"
-  loop: >-
-    {{ r_vns.resources | rejectattr('metadata.name', 'in', _duplicate_vns) | list }}
+  loop: "{{ r_vns_remaining.resources }}"
   loop_control:
     label: "{{ item.metadata.name }}"
 
