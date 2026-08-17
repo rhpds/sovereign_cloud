@@ -20,6 +20,7 @@
   loop_control:
     label: "{{ item.metadata.name }}"
 
+# Somehow these are not created by the OSAC operator, so we need to create them manually.
 - name: Create hub-access ClusterRole and ClusterRoleBinding
   kubernetes.core.k8s:
     state: present
@@ -27,6 +28,59 @@
   loop:
   - clusterrole-hub-access.yaml.j2
   - clusterrolebinding-hub-access.yaml.j2
+
+# The osac-operator has a race condition that creates duplicate VirtualNetwork CRs
+# (same UUID label, generated names). Detect and remove extras before waiting for
+# Tenant readiness, then re-trigger reconciliation on the remaining CRs.
+- name: Get all VirtualNetwork CRs
+  kubernetes.core.k8s_info:
+    api_version: osac.openshift.io/v1alpha1
+    kind: VirtualNetwork
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+  register: r_vns
+
+- name: Identify duplicate VirtualNetworks to remove (keep first by creationTimestamp)
+  ansible.builtin.set_fact:
+    _duplicate_vns: >-
+      {%- set ns = namespace(seen=[], dupes=[]) -%}
+      {%- for vn in r_vns.resources | sort(attribute='metadata.creationTimestamp') -%}
+        {%- set uuid = vn.metadata.labels['osac.openshift.io/virtualnetwork-uuid'] -%}
+        {%- if uuid in ns.seen -%}
+          {%- set ns.dupes = ns.dupes + [vn.metadata.name] -%}
+        {%- else -%}
+          {%- set ns.seen = ns.seen + [uuid] -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ ns.dupes }}
+
+- name: Delete duplicate VirtualNetworks (waiting for AAP deprovisioning to complete)
+  when: _duplicate_vns | length > 0
+  kubernetes.core.k8s:
+    state: absent
+    api_version: osac.openshift.io/v1alpha1
+    kind: VirtualNetwork
+    name: "{{ item }}"
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    wait: true
+    wait_timeout: 300
+  loop: "{{ _duplicate_vns }}"
+
+- name: Re-trigger reconciliation on remaining VirtualNetworks after duplicate removal
+  when: _duplicate_vns | length > 0
+  kubernetes.core.k8s:
+    state: patched
+    api_version: osac.openshift.io/v1alpha1
+    kind: VirtualNetwork
+    name: "{{ item.metadata.name }}"
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    definition:
+      metadata:
+        annotations:
+          reconcile.osac.openshift.io/ts: "{{ now(utc=true).isoformat() }}"
+  loop: >-
+    {{ r_vns.resources | rejectattr('metadata.name', 'in', _duplicate_vns) | list }}
+  loop_control:
+    label: "{{ item.metadata.name }}"
 
 - name: Restart fulfillment controller to trigger Tenant sync
   kubernetes.core.k8s:
@@ -338,6 +392,18 @@
           insecureEdgeTerminationPolicy: Redirect
           destinationCACertificate: "{{ r_service_ca_cm.resources[0].data['service-ca.crt'] }}"
 
+# Patch ConfigMap BEFORE the restart so the pod picks up the correct URL on start.
+- name: Patch osac-ui ConfigMap fulfillment URL to internal service
+  kubernetes.core.k8s:
+    state: patched
+    api_version: v1
+    kind: ConfigMap
+    name: osac-ui
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    definition:
+      data:
+        FULFILLMENT_API_URL: "https://fulfillment-internal-api:8001"
+
 - name: Restart OSAC UI, fulfillment ingress proxy, and fulfillment gRPC server
   kubernetes.core.k8s:
     state: patched
@@ -366,26 +432,3 @@
       type: Available
       status: "True"
     wait_timeout: 180
-
-- name: Verify osac-ui ConfigMap fulfillment URL
-  kubernetes.core.k8s_info:
-    api_version: v1
-    kind: ConfigMap
-    name: osac-ui
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-  register: r_osac_ui_cm
-
-- name: Patch osac-ui ConfigMap fulfillment URL if incorrect
-  when: >-
-    r_osac_ui_cm.resources | length > 0 and
-    r_osac_ui_cm.resources[0].data.FULFILLMENT_API_URL | default('')
-    != 'https://fulfillment-internal-api:8001'
-  kubernetes.core.k8s:
-    state: patched
-    api_version: v1
-    kind: ConfigMap
-    name: osac-ui
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-    definition:
-      data:
-        FULFILLMENT_API_URL: "https://fulfillment-internal-api:8001"
