@@ -1,35 +1,37 @@
 ---
-- name: Remove pre-existing cert-manager OperatorGroup to avoid conflict with Helm deploy
+# Adopt existing cert-manager. Although preferred to use pre-deployed cert-manager.
+- name: Adopt existing cert-manager
   when: ocp4_workload_osac_cert_manager_enabled | bool
-  kubernetes.core.k8s:
-    state: absent
-    api_version: operators.coreos.com/v1
-    kind: OperatorGroup
-    name: cert-manager-operator-og
-    namespace: cert-manager-operator
-  failed_when: false
+  block:
+  - name: Remove pre-existing cert-manager OperatorGroup to avoid conflict with Helm deploy
+    kubernetes.core.k8s:
+      state: absent
+      api_version: operators.coreos.com/v1
+      kind: OperatorGroup
+      name: cert-manager-operator-og
+      namespace: cert-manager-operator
+    failed_when: false
 
-- name: Adopt pre-existing cert-manager namespaces for Helm
-  when: ocp4_workload_osac_cert_manager_enabled | bool
-  kubernetes.core.k8s:
-    state: patched
-    api_version: v1
-    kind: Namespace
-    name: "{{ item }}"
-    definition:
-      metadata:
-        labels:
-          app.kubernetes.io/managed-by: Helm
-        annotations:
-          meta.helm.sh/release-name: osac-operators
-          meta.helm.sh/release-namespace: osac-operators
-  loop:
-  - cert-manager-operator
-  - cert-manager
-  register: r_adopt_ns
-  failed_when:
-  - r_adopt_ns is failed
-  - "'not found' not in (r_adopt_ns.msg | default(''))"
+  - name: Adopt pre-existing cert-manager namespaces for Helm
+    kubernetes.core.k8s:
+      state: patched
+      api_version: v1
+      kind: Namespace
+      name: "{{ item }}"
+      definition:
+        metadata:
+          labels:
+            app.kubernetes.io/managed-by: Helm
+          annotations:
+            meta.helm.sh/release-name: osac-operators
+            meta.helm.sh/release-namespace: osac-operators
+    loop:
+    - cert-manager-operator
+    - cert-manager
+    register: r_adopt_ns
+    failed_when:
+    - r_adopt_ns is failed
+    - "'not found' not in (r_adopt_ns.msg | default(''))"
 
 - name: Set Helm download URL
   ansible.builtin.set_fact:
@@ -60,7 +62,7 @@
           osac.openshift.io/tenant: shared
           osac.openshift.io/storage-tier: default
 
-- name: Run on Bastion
+- name: Set up Bastion VM
   delegate_to: "{{ _bastion_host }}"
   block:
   - name: Root operations
@@ -84,7 +86,7 @@
       until: r_helm_install is success
       delay: 30
 
-    - name: Rename helm binary
+    - name: Rename Helm binary
       ansible.builtin.copy:
         src: /usr/bin/helm-linux-amd64
         dest: /usr/bin/helm
@@ -93,12 +95,12 @@
         owner: root
         group: root
 
-    - name: Remove original helm binary
+    - name: Remove original Helm binary
       ansible.builtin.file:
         path: /usr/bin/helm-linux-amd64
         state: absent
 
-    - name: Download osac CLI
+    - name: Install OSAC CLI
       ansible.builtin.get_url:
         url: >-
           https://github.com/osac-project/osac/releases/download/fulfillment-service%2F{{
@@ -126,11 +128,11 @@
       version: "{{ ocp4_workload_osac_repo_version }}"
       depth: 1
 
-  - name: Ensure Makefile uses bash shell
-    ansible.builtin.lineinfile:
-      path: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/Makefile"
-      line: "SHELL := /bin/bash"
-      insertbefore: BOF
+  # - name: Ensure Makefile uses bash shell
+  #   ansible.builtin.lineinfile:
+  #     path: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/Makefile"
+  #     line: "SHELL := /bin/bash"
+  #     insertbefore: BOF
 
   - name: Patch Makefile to add --take-ownership to helm upgrade calls
     when: ocp4_workload_osac_cert_manager_enabled | bool
