@@ -218,4 +218,5 @@
   loop:
   - fulfillment-ingress-proxy
   - fulfillment-grpc-server
+  - fulfillment-controller
   - osac-ui
