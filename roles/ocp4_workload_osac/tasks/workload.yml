@@ -8,8 +8,8 @@
 - name: Call pre_install_tasks.yml
   ansible.builtin.include_tasks: pre_install_tasks.yml
 
-- name: Call setup_values.yml
-  ansible.builtin.include_tasks: setup_values.yml
+- name: Call setup_helm_options.yml
+  ansible.builtin.include_tasks: setup_helm_options.yml
 
 - name: Call install_osac.yml
   ansible.builtin.include_tasks: install_osac.yml

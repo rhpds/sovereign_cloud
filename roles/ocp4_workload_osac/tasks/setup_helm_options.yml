@@ -4,7 +4,7 @@
     ocp4_workload_osac_installer_values_file: >-
       {{ ocp4_workload_osac_installer_values_directory }}/values.yaml
 
-- name: Setup Helm values file
+- name: Setup Helm deployment options
   delegate_to: "{{ _bastion_host }}"
   block:
   - name: Set LVMS enabled state in values file
@@ -45,3 +45,29 @@
       value: "{{ _ocp4_workload_osac_user_password }}"
     loop_control:
       label: "{{ item.key }}"
+
+  - name: Find Helm hook YAML files
+    ansible.builtin.find:
+      paths: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts"
+      patterns: '*.yaml'
+      file_type: file
+      recurse: true
+    register: r_hook_files
+
+  - name: Increase memory limits in hook jobs
+    ansible.builtin.replace:
+      path: "{{ item.path }}"
+      regexp: 'memory: [0-9]+Mi'
+      replace: 'memory: 1Gi'
+    loop: "{{ r_hook_files.files | selectattr('path', 'search', '/hooks/') }}"
+    loop_control:
+      label: "{{ item.path | basename }}"
+
+  - name: Increase backoff limits in hook jobs
+    ansible.builtin.replace:
+      path: "{{ item.path }}"
+      regexp: 'backoffLimit: [0-9]+'
+      replace: 'backoffLimit: 30'
+    loop: "{{ r_hook_files.files | selectattr('path', 'search', '/hooks/') }}"
+    loop_control:
+      label: "{{ item.path | basename }}"
