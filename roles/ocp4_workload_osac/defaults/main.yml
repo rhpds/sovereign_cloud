@@ -19,8 +19,9 @@ ocp4_workload_osac_helm_mirror: https://mirror.openshift.com/pub/openshift-v4/cl
 
 # Use LVMS if true
 ocp4_workload_osac_lvms_enabled: false
-# Use predeployed cert manager if false
-ocp4_workload_osac_cert_manager_enabled: false
+
+# OSAC UI image tag
+ocp4_workload_osac_ui_image_tag: main
 
 # ------------------------------------------------
 # OSAC Credentials

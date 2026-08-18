@@ -1,38 +1,4 @@
 ---
-# Adopt existing cert-manager. Although preferred to use pre-deployed cert-manager.
-- name: Adopt existing cert-manager
-  when: ocp4_workload_osac_cert_manager_enabled | bool
-  block:
-  - name: Remove pre-existing cert-manager OperatorGroup to avoid conflict with Helm deploy
-    kubernetes.core.k8s:
-      state: absent
-      api_version: operators.coreos.com/v1
-      kind: OperatorGroup
-      name: cert-manager-operator-og
-      namespace: cert-manager-operator
-    failed_when: false
-
-  - name: Adopt pre-existing cert-manager namespaces for Helm
-    kubernetes.core.k8s:
-      state: patched
-      api_version: v1
-      kind: Namespace
-      name: "{{ item }}"
-      definition:
-        metadata:
-          labels:
-            app.kubernetes.io/managed-by: Helm
-          annotations:
-            meta.helm.sh/release-name: osac-operators
-            meta.helm.sh/release-namespace: osac-operators
-    loop:
-    - cert-manager-operator
-    - cert-manager
-    register: r_adopt_ns
-    failed_when:
-    - r_adopt_ns is failed
-    - "'not found' not in (r_adopt_ns.msg | default(''))"
-
 - name: Set Helm download URL
   ansible.builtin.set_fact:
     _ocp4_workload_osac_helm_url: >-
@@ -127,19 +93,6 @@
       recursive: true
       version: "{{ ocp4_workload_osac_repo_version }}"
       depth: 1
-
-  # - name: Ensure Makefile uses bash shell
-  #   ansible.builtin.lineinfile:
-  #     path: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/Makefile"
-  #     line: "SHELL := /bin/bash"
-  #     insertbefore: BOF
-
-  - name: Patch Makefile to add --take-ownership to helm upgrade calls
-    when: ocp4_workload_osac_cert_manager_enabled | bool
-    ansible.builtin.replace:
-      path: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/Makefile"
-      regexp: '--timeout'
-      replace: '--take-ownership --timeout'
 
   - name: Find Helm hook YAML files
     ansible.builtin.find:
