@@ -146,8 +146,9 @@
   delay: 10
   until: r_osac_ui_client is succeeded
 
-# trust-manager Bundle only has internal CA; after reencrypt,
-# fulfillment pods need the router CA too — useDefaultCAs pulls it in.
+# trust-manager Bundle needs: OSAC internal CA + system CAs (Google Trust Services,
+# ISRG/Let's Encrypt, etc.).  useDefaultCAs: true covers all public root CAs used
+# by the ingress wildcard cert, so the ingress CA chain is already trusted.
 - name: Add system CAs to trust-manager ca-bundle
   kubernetes.core.k8s:
     state: patched
@@ -162,16 +163,18 @@
             name: default-ca
         - useDefaultCAs: true
 
-# The fulfillment-api route is passthrough by default, presenting the service-CA
-# signed cert that browsers don't trust.  Switch to reencrypt so the OpenShift
-# router (which holds the cluster wildcard cert) terminates TLS for the browser.
-- name: Read OpenShift service CA cert
+# The fulfillment-api route is passthrough by default, presenting a cert signed by
+# OSAC's internal default-ca (not a public CA), which browsers reject.
+# Switch to reencrypt so the router (which holds the cluster wildcard cert) terminates
+# TLS for the browser.  The destinationCACertificate must be the OSAC default-ca — that
+# is what signed the Envoy proxy cert — NOT the OpenShift service CA.
+- name: Read OSAC default-ca cert for fulfillment-api route
   kubernetes.core.k8s_info:
     api_version: v1
-    kind: ConfigMap
-    name: openshift-service-ca.crt
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-  register: r_service_ca_cm
+    kind: Secret
+    name: default-ca
+    namespace: cert-manager
+  register: r_default_ca_secret
 
 - name: Convert fulfillment-api route from passthrough to reencrypt
   kubernetes.core.k8s:
@@ -185,7 +188,7 @@
         tls:
           termination: reencrypt
           insecureEdgeTerminationPolicy: Redirect
-          destinationCACertificate: "{{ r_service_ca_cm.resources[0].data['service-ca.crt'] }}"
+          destinationCACertificate: "{{ r_default_ca_secret.resources[0].data['ca.crt'] | b64decode }}"
 
 # Patch ConfigMap BEFORE the restart so the pod picks up the correct URL on start.
 - name: Patch osac-ui ConfigMap fulfillment URL to internal service
