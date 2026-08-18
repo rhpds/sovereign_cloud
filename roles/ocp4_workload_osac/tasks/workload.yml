@@ -1,6 +1,6 @@
 ---
-- name: Call setup_bastion.yml
-  ansible.builtin.include_tasks: setup_bastion.yml
+- name: Call setup_bastion_inventory.yml
+  ansible.builtin.include_tasks: setup_bastion_inventory.yml
 
 - name: Generate passwords if not provided
   ansible.builtin.include_tasks: setup_passwords.yml

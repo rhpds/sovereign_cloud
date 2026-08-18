@@ -21,144 +21,144 @@
     label: "{{ item.metadata.name }}"
 
 # Somehow these are not created by the OSAC operator, so we need to create them manually.
-- name: Create hub-access ClusterRole and ClusterRoleBinding
-  kubernetes.core.k8s:
-    state: present
-    template: "{{ item }}"
-  loop:
-  - clusterrole-hub-access.yaml.j2
-  - clusterrolebinding-hub-access.yaml.j2
+# - name: Create hub-access ClusterRole and ClusterRoleBinding
+#   kubernetes.core.k8s:
+#     state: present
+#     template: "{{ item }}"
+#   loop:
+#   - clusterrole-hub-access.yaml.j2
+#   - clusterrolebinding-hub-access.yaml.j2
 
 # The osac-operator has a race condition that creates duplicate VirtualNetwork CRs
 # (same UUID label, generated names). Remove extras and re-trigger reconciliation.
-- name: Get all VirtualNetwork CRs
-  kubernetes.core.k8s_info:
-    api_version: osac.openshift.io/v1alpha1
-    kind: VirtualNetwork
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-  register: r_vns
+# - name: Get all VirtualNetwork CRs
+#   kubernetes.core.k8s_info:
+#     api_version: osac.openshift.io/v1alpha1
+#     kind: VirtualNetwork
+#     namespace: "{{ ocp4_workload_osac_namespace }}"
+#   register: r_vns
 
-- name: Identify duplicate VirtualNetworks to delete (keep first name per UUID)
-  vars:
-    _sorted: "{{ r_vns.resources | sort(attribute='metadata.name') }}"
-    _names: "{{ _sorted | map(attribute='metadata.name') | list }}"
-    _uuids: "{{ _sorted | json_query('[].metadata.labels.\"osac.openshift.io/virtualnetwork-uuid\"') }}"
-    _keep: "{{ dict(_uuids[::-1] | zip(_names[::-1])) | dict2items | map(attribute='value') | list }}"
-  ansible.builtin.set_fact:
-    _duplicate_vns: "{{ _names | difference(_keep) }}"
+# - name: Identify duplicate VirtualNetworks to delete (keep first name per UUID)
+#   vars:
+#     _sorted: "{{ r_vns.resources | sort(attribute='metadata.name') }}"
+#     _names: "{{ _sorted | map(attribute='metadata.name') | list }}"
+#     _uuids: "{{ _sorted | json_query('[].metadata.labels.\"osac.openshift.io/virtualnetwork-uuid\"') }}"
+#     _keep: "{{ dict(_uuids[::-1] | zip(_names[::-1])) | dict2items | map(attribute='value') | list }}"
+#   ansible.builtin.set_fact:
+#     _duplicate_vns: "{{ _names | difference(_keep) }}"
 
-- name: Clear finalizers from duplicate VirtualNetworks
-  when: _duplicate_vns | length > 0
-  kubernetes.core.k8s:
-    state: patched
-    api_version: osac.openshift.io/v1alpha1
-    kind: VirtualNetwork
-    name: "{{ item }}"
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-    definition:
-      metadata:
-        finalizers: []
-  loop: "{{ _duplicate_vns }}"
+# - name: Clear finalizers from duplicate VirtualNetworks
+#   when: _duplicate_vns | length > 0
+#   kubernetes.core.k8s:
+#     state: patched
+#     api_version: osac.openshift.io/v1alpha1
+#     kind: VirtualNetwork
+#     name: "{{ item }}"
+#     namespace: "{{ ocp4_workload_osac_namespace }}"
+#     definition:
+#       metadata:
+#         finalizers: []
+#   loop: "{{ _duplicate_vns }}"
 
-- name: Delete duplicate VirtualNetworks (wait for full removal)
-  when: _duplicate_vns | length > 0
-  kubernetes.core.k8s:
-    state: absent
-    api_version: osac.openshift.io/v1alpha1
-    kind: VirtualNetwork
-    name: "{{ item }}"
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-    wait: true
-    wait_timeout: 300
-  loop: "{{ _duplicate_vns }}"
+# - name: Delete duplicate VirtualNetworks (wait for full removal)
+#   when: _duplicate_vns | length > 0
+#   kubernetes.core.k8s:
+#     state: absent
+#     api_version: osac.openshift.io/v1alpha1
+#     kind: VirtualNetwork
+#     name: "{{ item }}"
+#     namespace: "{{ ocp4_workload_osac_namespace }}"
+#     wait: true
+#     wait_timeout: 300
+#   loop: "{{ _duplicate_vns }}"
 
-- name: Annotate remaining VirtualNetworks to trigger reconciliation
-  when: _duplicate_vns | length > 0
-  kubernetes.core.k8s:
-    state: patched
-    api_version: osac.openshift.io/v1alpha1
-    kind: VirtualNetwork
-    name: "{{ item.metadata.name }}"
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-    definition:
-      metadata:
-        annotations:
-          reconcile.osac.openshift.io/ts: "{{ now(utc=true).isoformat() }}"
-  loop: "{{ r_vns.resources | rejectattr('metadata.name', 'in', _duplicate_vns) | list }}"
-  loop_control:
-    label: "{{ item.metadata.name }}"
+# - name: Annotate remaining VirtualNetworks to trigger reconciliation
+#   when: _duplicate_vns | length > 0
+#   kubernetes.core.k8s:
+#     state: patched
+#     api_version: osac.openshift.io/v1alpha1
+#     kind: VirtualNetwork
+#     name: "{{ item.metadata.name }}"
+#     namespace: "{{ ocp4_workload_osac_namespace }}"
+#     definition:
+#       metadata:
+#         annotations:
+#           reconcile.osac.openshift.io/ts: "{{ now(utc=true).isoformat() }}"
+#   loop: "{{ r_vns.resources | rejectattr('metadata.name', 'in', _duplicate_vns) | list }}"
+#   loop_control:
+#     label: "{{ item.metadata.name }}"
 
-- name: Restart fulfillment controller to trigger Tenant sync
-  kubernetes.core.k8s:
-    state: patched
-    api_version: apps/v1
-    kind: Deployment
-    name: fulfillment-controller
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-    definition:
-      spec:
-        template:
-          metadata:
-            annotations:
-              kubectl.kubernetes.io/restartedAt: "{{ now(utc=true).isoformat() }}"
+# - name: Restart fulfillment controller to trigger Tenant sync
+#   kubernetes.core.k8s:
+#     state: patched
+#     api_version: apps/v1
+#     kind: Deployment
+#     name: fulfillment-controller
+#     namespace: "{{ ocp4_workload_osac_namespace }}"
+#     definition:
+#       spec:
+#         template:
+#           metadata:
+#             annotations:
+#               kubectl.kubernetes.io/restartedAt: "{{ now(utc=true).isoformat() }}"
 
-- name: Wait for Tenant 'shared' to be created
-  kubernetes.core.k8s_info:
-    api_version: osac.openshift.io/v1alpha1
-    kind: Tenant
-    name: shared
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-  register: r_tenant_wait
-  until:
-  - r_tenant_wait.resources | length > 0
-  - r_tenant_wait.resources[0].status.phase | default('') == 'Ready'
-  retries: 30
-  delay: 10
+# - name: Wait for Tenant 'shared' to be created
+#   kubernetes.core.k8s_info:
+#     api_version: osac.openshift.io/v1alpha1
+#     kind: Tenant
+#     name: shared
+#     namespace: "{{ ocp4_workload_osac_namespace }}"
+#   register: r_tenant_wait
+#   until:
+#   - r_tenant_wait.resources | length > 0
+#   - r_tenant_wait.resources[0].status.phase | default('') == 'Ready'
+#   retries: 30
+#   delay: 10
 
 # --------------------------------------------------
 # OSAC AAP token (required for operator to reach AAP)
 # --------------------------------------------------
-- name: Wait for AAP token creation job to complete
-  kubernetes.core.k8s_info:
-    api_version: batch/v1
-    kind: Job
-    name: osac-aap-create-token
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-    wait_condition:
-      type: Complete
-      status: "True"
-    wait_timeout: 600
+# - name: Wait for AAP token creation job to complete
+#   kubernetes.core.k8s_info:
+#     api_version: batch/v1
+#     kind: Job
+#     name: osac-aap-create-token
+#     namespace: "{{ ocp4_workload_osac_namespace }}"
+#     wait_condition:
+#       type: Complete
+#       status: "True"
+#     wait_timeout: 600
 
-- name: Read osac-operator deployment
-  kubernetes.core.k8s_info:
-    api_version: apps/v1
-    kind: Deployment
-    name: osac-operator
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-  register: r_osac_operator_deploy
+# - name: Read osac-operator deployment
+#   kubernetes.core.k8s_info:
+#     api_version: apps/v1
+#     kind: Deployment
+#     name: osac-operator
+#     namespace: "{{ ocp4_workload_osac_namespace }}"
+#   register: r_osac_operator_deploy
 
-- name: Patch OSAC_AAP_TOKEN onto osac-operator deployment
-  vars:
-    _osac_container: "{{ r_osac_operator_deploy.resources[0].spec.template.spec.containers[0] }}"
-  kubernetes.core.k8s:
-    state: patched
-    api_version: apps/v1
-    kind: Deployment
-    name: osac-operator
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-    definition:
-      spec:
-        template:
-          spec:
-            containers:
-            - name: "{{ _osac_container.name }}"
-              image: "{{ _osac_container.image }}"
-              env:
-              - name: OSAC_AAP_TOKEN
-                valueFrom:
-                  secretKeyRef:
-                    name: osac-aap-api-token
-                    key: token
+# - name: Patch OSAC_AAP_TOKEN onto osac-operator deployment
+#   vars:
+#     _osac_container: "{{ r_osac_operator_deploy.resources[0].spec.template.spec.containers[0] }}"
+#   kubernetes.core.k8s:
+#     state: patched
+#     api_version: apps/v1
+#     kind: Deployment
+#     name: osac-operator
+#     namespace: "{{ ocp4_workload_osac_namespace }}"
+#     definition:
+#       spec:
+#         template:
+#           spec:
+#             containers:
+#             - name: "{{ _osac_container.name }}"
+#               image: "{{ _osac_container.image }}"
+#               env:
+#               - name: OSAC_AAP_TOKEN
+#                 valueFrom:
+#                   secretKeyRef:
+#                     name: osac-aap-api-token
+#                     key: token
 
 # --------------------------------------------------------------
 # Keycloak public URL configuration (required for browser login)
