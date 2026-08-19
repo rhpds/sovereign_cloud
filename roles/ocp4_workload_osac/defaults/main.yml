@@ -38,9 +38,10 @@ ocp4_workload_osac_user_password: ""
 ocp4_workload_osac_cli_version: v0.0.87
 
 # ------------------------------------------------
-# Storage class for tenant patching
+# Storage classes for tenant patching
 # ------------------------------------------------
 ocp4_workload_osac_storage_class: ocs-external-storagecluster-ceph-rbd
+ocp4_workload_osac_storage_class_local: ocs-external-storagecluster-ceph-rbd-immediate
 
 # ------------------------------------------------
 # AAP license (required, Ansible-vaulted license.zip)

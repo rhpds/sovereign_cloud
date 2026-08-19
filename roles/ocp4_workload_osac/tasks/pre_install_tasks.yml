@@ -16,7 +16,8 @@
       {{ ocp4_workload_osac_aap_license_s3_url | urlsplit('hostname')
           | regex_replace('^.*\.s3\.([^.]+)\.amazonaws\.com$', '\1') }}
 
-- name: Label storage class for OSAC Tenant
+- name: Label storage class for OSAC Tenant shared (default)
+  when: ocp4_workload_osac_storage_class | default("") | length > 0
   kubernetes.core.k8s:
     state: patched
     api_version: storage.k8s.io/v1
@@ -27,6 +28,19 @@
         labels:
           osac.openshift.io/tenant: shared
           osac.openshift.io/storage-tier: default
+
+- name: Label storage class for OSAC Tenant shared (local)
+  when: ocp4_workload_osac_storage_class_local | default("") | length > 0
+  kubernetes.core.k8s:
+    state: patched
+    api_version: storage.k8s.io/v1
+    kind: StorageClass
+    name: "{{ ocp4_workload_osac_storage_class_local }}"
+    definition:
+      metadata:
+        labels:
+          osac.openshift.io/tenant: shared
+          osac.openshift.io/storage-tier: local
 
 - name: Set up Bastion VM
   delegate_to: "{{ _bastion_host }}"
