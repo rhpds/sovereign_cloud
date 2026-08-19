@@ -20,6 +20,79 @@
   loop_control:
     label: "{{ item.metadata.name }}"
 
+# The osac-operator has a race condition that creates duplicate VirtualNetwork CRs
+# (same UUID label, generated names). Remove extras and re-trigger reconciliation.
+- name: Get all VirtualNetwork CRs
+  kubernetes.core.k8s_info:
+    api_version: osac.openshift.io/v1alpha1
+    kind: VirtualNetwork
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+  register: r_vns
+
+- name: Identify duplicate VirtualNetworks to delete (keep first name per UUID)
+  vars:
+    _sorted: "{{ r_vns.resources | sort(attribute='metadata.name') }}"
+    _names: "{{ _sorted | map(attribute='metadata.name') | list }}"
+    _uuids: "{{ _sorted | json_query('[].metadata.labels.\"osac.openshift.io/virtualnetwork-uuid\"') }}"
+    _keep: "{{ dict(_uuids[::-1] | zip(_names[::-1])) | dict2items | map(attribute='value') | list }}"
+  ansible.builtin.set_fact:
+    _duplicate_vns: "{{ _names | difference(_keep) }}"
+
+- name: Clear finalizers from duplicate VirtualNetworks
+  when: _duplicate_vns | length > 0
+  kubernetes.core.k8s:
+    state: patched
+    api_version: osac.openshift.io/v1alpha1
+    kind: VirtualNetwork
+    name: "{{ item }}"
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    definition:
+      metadata:
+        finalizers: []
+  loop: "{{ _duplicate_vns }}"
+
+- name: Delete duplicate VirtualNetworks (wait for full removal)
+  when: _duplicate_vns | length > 0
+  kubernetes.core.k8s:
+    state: absent
+    api_version: osac.openshift.io/v1alpha1
+    kind: VirtualNetwork
+    name: "{{ item }}"
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    wait: true
+    wait_timeout: 300
+  loop: "{{ _duplicate_vns }}"
+
+- name: Annotate remaining VirtualNetworks to trigger reconciliation
+  when: _duplicate_vns | length > 0
+  kubernetes.core.k8s:
+    state: patched
+    api_version: osac.openshift.io/v1alpha1
+    kind: VirtualNetwork
+    name: "{{ item.metadata.name }}"
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    definition:
+      metadata:
+        annotations:
+          reconcile.osac.openshift.io/ts: "{{ now(utc=true).isoformat() }}"
+  loop: "{{ r_vns.resources | rejectattr('metadata.name', 'in', _duplicate_vns) | list }}"
+  loop_control:
+    label: "{{ item.metadata.name }}"
+
+- name: Restart fulfillment controller to trigger Tenant sync
+  kubernetes.core.k8s:
+    state: patched
+    api_version: apps/v1
+    kind: Deployment
+    name: fulfillment-controller
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    definition:
+      spec:
+        template:
+          metadata:
+            annotations:
+              kubectl.kubernetes.io/restartedAt: "{{ now(utc=true).isoformat() }}"
+
 # --------------------------------------------------------------
 # Keycloak public URL configuration (required for browser login)
 # --------------------------------------------------------------
