@@ -224,8 +224,29 @@
   - osac-ui
 
 # --------------------------------------------------------------
-# Attempt to fix duplicate VirtualNetworks
+# Restart fulfillment-controller first, then dedup VirtualNetworks.
+# Order matters: the FC restart triggers a startup burst that creates duplicate
+# VirtualNetwork CRs (informer cache empty on startup, same VN enqueued 2-3×).
+# We wait 30s for the burst to complete, then dedup catches and removes them.
 # --------------------------------------------------------------
+- name: Restart fulfillment controller to trigger Tenant sync
+  kubernetes.core.k8s:
+    state: patched
+    api_version: apps/v1
+    kind: Deployment
+    name: fulfillment-controller
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    definition:
+      spec:
+        template:
+          metadata:
+            annotations:
+              kubectl.kubernetes.io/restartedAt: "{{ now(utc=true).isoformat() }}"
+
+- name: Wait for fulfillment-controller cache to warm after restart
+  ansible.builtin.pause:
+    seconds: 30
+
 # The osac-operator has a race condition that creates duplicate VirtualNetwork CRs
 # (same UUID label, generated names). Remove extras and re-trigger reconciliation.
 - name: Get all VirtualNetwork CRs
@@ -284,17 +305,3 @@
   loop: "{{ r_vns.resources | rejectattr('metadata.name', 'in', _duplicate_vns) | list }}"
   loop_control:
     label: "{{ item.metadata.name }}"
-
-- name: Restart fulfillment controller to trigger Tenant sync
-  kubernetes.core.k8s:
-    state: patched
-    api_version: apps/v1
-    kind: Deployment
-    name: fulfillment-controller
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-    definition:
-      spec:
-        template:
-          metadata:
-            annotations:
-              kubectl.kubernetes.io/restartedAt: "{{ now(utc=true).isoformat() }}"
