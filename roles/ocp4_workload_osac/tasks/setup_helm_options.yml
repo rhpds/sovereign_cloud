@@ -15,6 +15,15 @@
       regexp: '(lvms:\n\s+enabled:\s+)\w+'
       replace: '\g<1>{{ ocp4_workload_osac_lvms_enabled | lower }}'
 
+  - name: Patch LVMCluster with configured disk paths
+    when:
+    - ocp4_workload_osac_lvms_enabled | bool
+    - ocp4_workload_osac_lvms_disks | length > 0
+    ansible.builtin.template:
+      src: lvms-cluster-config.yaml.j2
+      dest: >-
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-prereqs/templates/lvms.yaml
+
   - name: Disable cert-manager deployment in operators chart (pre-installed via platform)
     ansible.builtin.replace:
       path: >-
