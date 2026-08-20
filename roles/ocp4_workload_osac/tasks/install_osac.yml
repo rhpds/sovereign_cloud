@@ -1,0 +1,64 @@
+---
+# ponytail: no async — async+delegate_to is broken in AAP; tee keeps SSH alive
+- name: "OSAC Phase 1: Install operators"
+  delegate_to: "{{ _bastion_host }}"
+  environment:
+    KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      make install-operators
+      VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
+      INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
+      2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
+    chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
+  changed_when: true
+
+- name: Wait for operators to be ready
+  kubernetes.core.k8s_info:
+    api_version: operators.coreos.com/v1alpha1
+    kind: ClusterServiceVersion
+    namespace: "{{ item.namespace }}"
+    label_selectors:
+    - "operators.coreos.com/{{ item.operator }}"
+  loop:
+  - operator: kubevirt-hyperconverged.openshift-cnv
+    namespace: openshift-cnv
+  # - operator: multicluster-engine.multicluster-engine
+  #   namespace: multicluster-engine
+  loop_control:
+    label: "{{ item.operator }}"
+  register: r_csv_wait
+  until:
+  - r_csv_wait.resources | length > 0
+  - r_csv_wait.resources[0].status.phase | default('') == 'Succeeded'
+  retries: 60
+  delay: 30
+
+- name: "OSAC Phase 2: Install prerequisites"
+  delegate_to: "{{ _bastion_host }}"
+  environment:
+    KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      make install-prereqs
+      VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
+      INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
+      2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
+    chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
+  changed_when: true
+
+- name: "OSAC Phase 3: Install OSAC"
+  delegate_to: "{{ _bastion_host }}"
+  environment:
+    KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail;
+      make install-osac
+      VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
+      INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
+      2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
+    chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
+  changed_when: true

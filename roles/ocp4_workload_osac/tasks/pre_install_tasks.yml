@@ -1,34 +1,4 @@
 ---
-- name: Remove pre-existing cert-manager OperatorGroup to avoid conflict with Helm deploy
-  kubernetes.core.k8s:
-    state: absent
-    api_version: operators.coreos.com/v1
-    kind: OperatorGroup
-    name: cert-manager-operator-og
-    namespace: cert-manager-operator
-  failed_when: false
-
-- name: Adopt pre-existing cert-manager namespaces for Helm
-  kubernetes.core.k8s:
-    state: patched
-    api_version: v1
-    kind: Namespace
-    name: "{{ item }}"
-    definition:
-      metadata:
-        labels:
-          app.kubernetes.io/managed-by: Helm
-        annotations:
-          meta.helm.sh/release-name: osac-operators
-          meta.helm.sh/release-namespace: osac-operators
-  loop:
-  - cert-manager-operator
-  - cert-manager
-  register: r_adopt_ns
-  failed_when:
-  - r_adopt_ns is failed
-  - "'not found' not in (r_adopt_ns.msg | default(''))"
-
 - name: Set Helm download URL
   ansible.builtin.set_fact:
     _ocp4_workload_osac_helm_url: >-
@@ -46,7 +16,8 @@
       {{ ocp4_workload_osac_aap_license_s3_url | urlsplit('hostname')
           | regex_replace('^.*\.s3\.([^.]+)\.amazonaws\.com$', '\1') }}
 
-- name: Label storage class for OSAC Tenant
+- name: Label storage class for OSAC Tenant shared (default)
+  when: ocp4_workload_osac_storage_class | default("") | length > 0
   kubernetes.core.k8s:
     state: patched
     api_version: storage.k8s.io/v1
@@ -58,7 +29,20 @@
           osac.openshift.io/tenant: shared
           osac.openshift.io/storage-tier: default
 
-- name: Run on Bastion
+- name: Label storage class for OSAC Tenant shared (local)
+  when: ocp4_workload_osac_storage_class_local | default("") | length > 0
+  kubernetes.core.k8s:
+    state: patched
+    api_version: storage.k8s.io/v1
+    kind: StorageClass
+    name: "{{ ocp4_workload_osac_storage_class_local }}"
+    definition:
+      metadata:
+        labels:
+          osac.openshift.io/tenant: shared
+          osac.openshift.io/storage-tier: local
+
+- name: Set up Bastion VM
   delegate_to: "{{ _bastion_host }}"
   block:
   - name: Root operations
@@ -82,7 +66,7 @@
       until: r_helm_install is success
       delay: 30
 
-    - name: Rename helm binary
+    - name: Rename Helm binary
       ansible.builtin.copy:
         src: /usr/bin/helm-linux-amd64
         dest: /usr/bin/helm
@@ -91,12 +75,12 @@
         owner: root
         group: root
 
-    - name: Remove original helm binary
+    - name: Remove original Helm binary
       ansible.builtin.file:
         path: /usr/bin/helm-linux-amd64
         state: absent
 
-    - name: Download osac CLI
+    - name: Install OSAC CLI
       ansible.builtin.get_url:
         url: >-
           https://github.com/osac-project/osac/releases/download/fulfillment-service%2F{{
@@ -123,44 +107,6 @@
       recursive: true
       version: "{{ ocp4_workload_osac_repo_version }}"
       depth: 1
-
-  - name: Ensure Makefile uses bash shell
-    ansible.builtin.lineinfile:
-      path: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/Makefile"
-      line: "SHELL := /bin/bash"
-      insertbefore: BOF
-
-  - name: Patch Makefile to add --take-ownership to helm upgrade calls
-    ansible.builtin.replace:
-      path: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/Makefile"
-      regexp: '--timeout'
-      replace: '--take-ownership --timeout'
-
-  - name: Find Helm hook YAML files
-    ansible.builtin.find:
-      paths: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts"
-      patterns: '*.yaml'
-      file_type: file
-      recurse: true
-    register: r_hook_files
-
-  - name: Increase memory limits in hook jobs
-    ansible.builtin.replace:
-      path: "{{ item.path }}"
-      regexp: 'memory: [0-9]+Mi'
-      replace: 'memory: 1Gi'
-    loop: "{{ r_hook_files.files | selectattr('path', 'search', '/hooks/') }}"
-    loop_control:
-      label: "{{ item.path | basename }}"
-
-  - name: Increase backoff limits in hook jobs
-    ansible.builtin.replace:
-      path: "{{ item.path }}"
-      regexp: 'backoffLimit: [0-9]+'
-      replace: 'backoffLimit: 30'
-    loop: "{{ r_hook_files.files | selectattr('path', 'search', '/hooks/') }}"
-    loop_control:
-      label: "{{ item.path | basename }}"
 
   - name: Copy AAP license from Execution Environment to the Installer directory
     ansible.builtin.copy:

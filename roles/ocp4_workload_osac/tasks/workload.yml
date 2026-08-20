@@ -1,6 +1,6 @@
 ---
-- name: Call setup_bastion.yml
-  ansible.builtin.include_tasks: setup_bastion.yml
+- name: Call setup_bastion_inventory.yml
+  ansible.builtin.include_tasks: setup_bastion_inventory.yml
 
 - name: Generate passwords if not provided
   ansible.builtin.include_tasks: setup_passwords.yml
@@ -8,135 +8,14 @@
 - name: Call pre_install_tasks.yml
   ansible.builtin.include_tasks: pre_install_tasks.yml
 
-- name: Call setup_values.yml
-  ansible.builtin.include_tasks: setup_values.yml
+- name: Call setup_helm_options.yml
+  ansible.builtin.include_tasks: setup_helm_options.yml
 
-# ponytail: no async — async+delegate_to is broken in AAP; tee keeps SSH alive
-- name: "OSAC Phase 1: Install operators"
-  delegate_to: "{{ _bastion_host }}"
-  environment:
-    KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
-  ansible.builtin.shell:
-    cmd: >-
-      set -o pipefail;
-      make install-operators
-      VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
-      INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
-      2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
-    chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
-  changed_when: true
-
-- name: Wait for operators to be ready
-  kubernetes.core.k8s_info:
-    api_version: operators.coreos.com/v1alpha1
-    kind: ClusterServiceVersion
-    namespace: "{{ item.namespace }}"
-    label_selectors:
-    - "operators.coreos.com/{{ item.operator }}"
-  loop:
-  - operator: kubevirt-hyperconverged.openshift-cnv
-    namespace: openshift-cnv
-  # - operator: multicluster-engine.multicluster-engine
-  #   namespace: multicluster-engine
-  loop_control:
-    label: "{{ item.operator }}"
-  register: r_csv_wait
-  until:
-  - r_csv_wait.resources | length > 0
-  - r_csv_wait.resources[0].status.phase | default('') == 'Succeeded'
-  retries: 60
-  delay: 30
-
-- name: "OSAC Phase 2: Install prerequisites"
-  delegate_to: "{{ _bastion_host }}"
-  environment:
-    KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
-  ansible.builtin.shell:
-    cmd: >-
-      set -o pipefail;
-      make install-prereqs
-      VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
-      INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
-      2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
-    chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
-  changed_when: true
-
-- name: "OSAC Phase 3: Install OSAC"
-  delegate_to: "{{ _bastion_host }}"
-  environment:
-    KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
-  ansible.builtin.shell:
-    cmd: >-
-      set -o pipefail;
-      make install-osac
-      VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
-      INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
-      2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
-    chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
-  changed_when: true
+- name: Call install_osac.yml
+  ansible.builtin.include_tasks: install_osac.yml
 
 - name: Call post_install_fixes.yml
   ansible.builtin.include_tasks: post_install_fixes.yml
 
-# Get data for AgnosticD user info
-- name: Get OSAC UI Route URL
-  kubernetes.core.k8s_info:
-    api_version: route.openshift.io/v1
-    kind: Route
-    name: osac-ui
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-  register: r_osac_ui_route
-  until: r_osac_ui_route.resources | length > 0
-  retries: 30
-  delay: 10
-
-- name: Get Fullfillment API Route URL
-  kubernetes.core.k8s_info:
-    api_version: route.openshift.io/v1
-    kind: Route
-    name: fulfillment-api
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-  register: r_fullfillment_api_route
-  until: r_fullfillment_api_route.resources | length > 0
-  retries: 30
-  delay: 10
-
-- name: Get AAP Route URL
-  kubernetes.core.k8s_info:
-    api_version: route.openshift.io/v1
-    kind: Route
-    name: osac-aap
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-  register: r_osac_aap_route
-  until: r_osac_aap_route.resources | length > 0
-  retries: 30
-  delay: 10
-
-- name: Get Keycloak Route URL
-  kubernetes.core.k8s_info:
-    api_version: route.openshift.io/v1
-    kind: Route
-    name: keycloak
-    namespace: keycloak
-  register: r_keycloak_route
-  until: r_keycloak_route.resources | length > 0
-  retries: 30
-  delay: 10
-
-- name: Set URL facts
-  ansible.builtin.set_fact:
-    _ocp4_workload_osac_ui_url: "https://{{ r_osac_ui_route.resources[0].spec.host }}"
-    _ocp4_workload_osac_fullfillment_api_url: "https://{{ r_fullfillment_api_route.resources[0].spec.host }}"
-    _ocp4_workload_osac_aap_url: "https://{{ r_osac_aap_route.resources[0].spec.host }}"
-    _ocp4_workload_osac_keycloak_url: "https://{{ r_keycloak_route.resources[0].spec.host }}"
-
-- name: Save AgnosticD user info
-  agnosticd.core.agnosticd_user_info:
-    data:
-      osac_ui_url: "{{ _ocp4_workload_osac_ui_url }}"
-      osac_admin_user: "{{ ocp4_workload_osac_admin_user }}"
-      osac_admin_password: "{{ _ocp4_workload_osac_admin_password }}"
-      osac_user_password: "{{ _ocp4_workload_osac_user_password }}"
-      osac_fullfillment_api_url: "{{ _ocp4_workload_osac_fullfillment_api_url }}"
-      osac_aap_url: "{{ _ocp4_workload_osac_aap_url }}"
-      osac_keycloak_url: "{{ _ocp4_workload_osac_keycloak_url }}"
+- name: Call agd_user_info.yml
+  ansible.builtin.include_tasks: agd_user_info.yml
