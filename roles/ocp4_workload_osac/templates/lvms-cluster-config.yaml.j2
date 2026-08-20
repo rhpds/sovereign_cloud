@@ -1,10 +1,10 @@
-{% raw %}{{- if .Values.lvms.enabled }}{% endraw %}
+{{ '{{' }}- if .Values.lvms.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: osac-prereqs-lvms-config
   labels:
-{% raw %}    {{- include "osac-prereqs.labels" . | nindent 4 }}{% endraw %}
+    {{ '{{' }}- include "osac-prereqs.labels" . | nindent 4 }}
   annotations:
     "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-delete-policy": before-hook-creation
@@ -20,12 +20,10 @@ data:
         deviceClasses:
           - name: vg1
             default: true
-{% if ocp4_workload_osac_lvms_disks | length > 0 %}
             deviceSelector:
               paths:
-{{ ocp4_workload_osac_lvms_disks | to_nice_yaml | indent(16, True) }}{% endif %}
-            thinPoolConfig:
+{{ ocp4_workload_osac_lvms_disks | to_nice_yaml | indent(16, True) }}            thinPoolConfig:
               name: thin-pool-1
               sizePercent: 90
               overprovisionRatio: 10
-{% raw %}{{- end }}{% endraw %}
+{{ '{{' }}- end }}
