@@ -35,7 +35,7 @@ ocp4_workload_osac_user_password: ""
 # osac CLI
 # ------------------------------------------------
 # https://github.com/osac-project/osac/releases/download/fulfillment-service%2Fv0.0.87/osac_Linux_x86_64
-ocp4_workload_osac_cli_version: v0.0.87
+ocp4_workload_osac_cli_version: v0.0.89
 
 # ------------------------------------------------
 # Storage classes for tenant patching
