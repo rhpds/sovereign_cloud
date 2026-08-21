@@ -7,40 +7,46 @@
 - name: Setup Helm deployment options
   delegate_to: "{{ _bastion_host }}"
   block:
-  - name: Set LVMS enabled state in values file
+  - name: Disable LVM Storage in values file
     when: not ocp4_workload_osac_lvms_enabled | bool
     ansible.builtin.replace:
       path: >-
         ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/{{ ocp4_workload_osac_installer_values_file }}
       regexp: '(lvms:\n\s+enabled:\s+)\w+'
-      replace: '\g<1>{{ ocp4_workload_osac_lvms_enabled | lower }}'
+      replace: '\g<1>false'
 
-  - name: Patch LVMS operator chart namespace to openshift-lvm-storage
+  - name: Set up LVM Storage
     when: ocp4_workload_osac_lvms_enabled | bool
-    ansible.builtin.replace:
-      path: >-
-        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-operators/templates/lvms.yaml
-      regexp: openshift-storage
-      replace: openshift-lvm-storage
+    block:
+    - name: Patch LVMS operator chart namespace to openshift-lvm-storage
+      ansible.builtin.replace:
+        path: >-
+          ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-operators/templates/lvms.yaml
+        regexp: openshift-storage
+        replace: openshift-lvm-storage
 
-  - name: Patch LVMS configure-lvms.sh namespace to openshift-lvm-storage
-    when: ocp4_workload_osac_lvms_enabled | bool
-    ansible.builtin.replace:
-      path: >-
-        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-prereqs/files/hooks/configure-lvms.sh
-      regexp: openshift-storage
-      replace: openshift-lvm-storage
+    - name: Patch LVMS configure-lvms.sh namespace to openshift-lvm-storage
+      ansible.builtin.replace:
+        path: >-
+          ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-prereqs/files/hooks/configure-lvms.sh
+        regexp: openshift-storage
+        replace: openshift-lvm-storage
 
-  - name: Patch LVMCluster with configured disk paths
-    when:
-    - ocp4_workload_osac_lvms_enabled | bool
-    - ocp4_workload_osac_lvms_disks | length > 0
-    ansible.builtin.template:
-      src: lvms-cluster-config.yaml.j2
-      dest: >-
-        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-prereqs/templates/lvms.yaml
-      owner: "{{ ansible_user }}"
-      mode: ug=rw,o=r
+    - name: Patch LVMCluster with configured disk paths
+      when: ocp4_workload_osac_lvms_disks | length > 0
+      ansible.builtin.template:
+        src: lvms-cluster-config.yaml.j2
+        dest: >-
+          ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-prereqs/templates/lvms.yaml
+        owner: "{{ ansible_user }}"
+        mode: ug=rw,o=r
+
+    - name: Increase install-osac Helm timeout for LVMS clusters
+      ansible.builtin.replace:
+        path: >-
+          ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/Makefile
+        regexp: '(--timeout )40m( --wait)'
+        replace: '\g<1>90m\g<2>'
 
   - name: Disable cert-manager deployment in operators chart (pre-installed via platform)
     ansible.builtin.replace:

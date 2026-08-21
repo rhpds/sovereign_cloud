@@ -19,12 +19,12 @@
 - name: Label storage class for OSAC Tenant shared (default)
   when:
   - not ocp4_workload_osac_lvms_enabled | bool
-  - ocp4_workload_osac_storage_class | default("") | length > 0
+  - ocp4_workload_osac_ceph_storage_class | default("") | length > 0
   kubernetes.core.k8s:
     state: patched
     api_version: storage.k8s.io/v1
     kind: StorageClass
-    name: "{{ ocp4_workload_osac_storage_class }}"
+    name: "{{ ocp4_workload_osac_ceph_storage_class }}"
     definition:
       metadata:
         labels:
@@ -34,12 +34,12 @@
 - name: Label storage class for OSAC Tenant shared (local)
   when:
   - not ocp4_workload_osac_lvms_enabled | bool
-  - ocp4_workload_osac_storage_class_local | default("") | length > 0
+  - ocp4_workload_osac_ceph_storage_class_local | default("") | length > 0
   kubernetes.core.k8s:
     state: patched
     api_version: storage.k8s.io/v1
     kind: StorageClass
-    name: "{{ ocp4_workload_osac_storage_class_local }}"
+    name: "{{ ocp4_workload_osac_ceph_storage_class_local }}"
     definition:
       metadata:
         labels:
