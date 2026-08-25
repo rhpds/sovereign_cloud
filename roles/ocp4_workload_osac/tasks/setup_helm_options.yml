@@ -7,58 +7,86 @@
 - name: Setup Helm deployment options
   delegate_to: "{{ _bastion_host }}"
   block:
+  - name: Disable cert-manager deployment in operators chart (pre-installed via platform)
+    ansible.builtin.replace:
+      path: >-
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/{{ ocp4_workload_osac_installer_profile }}/infra.yaml
+      regexp: '(certManager:\n\s+enabled:\s+)\w+'
+      replace: '\g<1>false'
+
   - name: Disable LVM Storage in values file
     when: not ocp4_workload_osac_lvms_enabled | bool
     ansible.builtin.replace:
       path: >-
-        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/{{ ocp4_workload_osac_installer_values_file }}
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/{{ ocp4_workload_osac_installer_profile }}/infra.yaml
       regexp: '(lvms:\n\s+enabled:\s+)\w+'
       replace: '\g<1>false'
 
   - name: Set up LVM Storage
     when: ocp4_workload_osac_lvms_enabled | bool
     block:
-    - name: Patch LVMS operator chart namespace to openshift-lvm-storage
+    - name: Patch LVMS operator chart namespace to openshift-lvm-storage in osac-deps
       ansible.builtin.replace:
         path: >-
-          ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-operators/templates/lvms.yaml
+          ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-deps/templates/lvms.yaml
         regexp: openshift-storage
         replace: openshift-lvm-storage
 
-    - name: Patch LVMS configure-lvms.sh namespace to openshift-lvm-storage
+    - name: Patch LVMS operator chart namespace to openshift-lvm-storage in osac-infra
       ansible.builtin.replace:
         path: >-
-          ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-prereqs/files/hooks/configure-lvms.sh
+          ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-infra/templates/lvms.yaml
         regexp: openshift-storage
         replace: openshift-lvm-storage
 
-    - name: Patch LVMCluster with configured disk paths
+    - name: Patch LVMCluster with configured disk paths in osac-infra
       when: ocp4_workload_osac_lvms_disks | length > 0
       ansible.builtin.template:
         src: lvms-cluster-config.yaml.j2
         dest: >-
-          ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-prereqs/templates/lvms.yaml
+          ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-infra/templates/lvms.yaml
         owner: "{{ ansible_user }}"
         mode: ug=rw,o=r
 
-  - name: Disable cert-manager deployment in operators chart (pre-installed via platform)
-    ansible.builtin.replace:
-      path: >-
-        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/{{ ocp4_workload_osac_installer_values_file }}
-      regexp: '(certManager:\n\s+enabled:\s+)\w+'
-      replace: '\g<1>false'
+    - name: Patch LVMS configure-lvms.sh namespace to openshift-lvm-storage in osac-infra
+      ansible.builtin.replace:
+        path: >-
+          ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-infra/files/hooks/configure-lvms.sh
+        regexp: openshift-storage
+        replace: openshift-lvm-storage
 
   - name: Set osac-ui image tag to {{ ocp4_workload_osac_ui_image_tag }}
     ansible.builtin.replace:
       path: >-
-        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/{{ ocp4_workload_osac_installer_values_file }}
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/{{ ocp4_workload_osac_installer_profile }}/instance.yaml
       regexp: '(ghcr\.io/osac-project/osac-ui:)\S+'
       replace: '\g<1>{{ ocp4_workload_osac_ui_image_tag }}'
+
+  - name: Patch keycloak set-passwords script - exact user lookup
+    ansible.builtin.replace:
+      path: >-
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-infra/templates/keycloak/resources.yaml
+      regexp: 'users\?username=\$username"'
+      replace: 'users?username=$username&exact=true"'
+
+  - name: Patch keycloak set-passwords script - safe Python indexing
+    ansible.builtin.replace:
+      path: >-
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-infra/templates/keycloak/resources.yaml
+      regexp: 'import sys,json; print\(json\.load\(sys\.stdin\)\[0\]\[.id.\]\)'
+      replace: "import sys,json; d=json.load(sys.stdin); print(d[0]['id'] if d else '')"
+
+  - name: Patch keycloak set-passwords script - skip missing users gracefully
+    ansible.builtin.replace:
+      path: >-
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-infra/templates/keycloak/resources.yaml
+      regexp: 'Could not find user.*return 1'
+      replace: 'User $username not found, skipping"; return 0'
 
   - name: Set Keycloak admin credentials in values file
     ansible.builtin.lineinfile:
       path: >-
-        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/{{ ocp4_workload_osac_installer_values_file }}
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/{{ ocp4_workload_osac_installer_profile }}/infra.yaml
       insertafter: '^keycloak:'
       regexp: '^\s+{{ item.key }}:'
       line: '  {{ item.key }}: {{ item.value }}'

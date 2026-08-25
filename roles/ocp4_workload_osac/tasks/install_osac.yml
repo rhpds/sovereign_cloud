@@ -1,104 +1,59 @@
 ---
 # ponytail: no async — async+delegate_to is broken in AAP; tee keeps SSH alive
-- name: "OSAC Phase 1: Install operators"
+- name: "OSAC Phase 1: Install infra"
   delegate_to: "{{ _bastion_host }}"
   environment:
     KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
   ansible.builtin.shell:
     cmd: >-
       set -o pipefail;
-      make install-operators
-      VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
-      INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
+      make install-infra
+      PLATFORM=openshift
+      PROFILE={{ ocp4_workload_osac_installer_profile }}
+      NS={{ ocp4_workload_osac_namespace }}
       2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
     chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
   changed_when: true
 
-- name: Wait for operators to be ready
-  kubernetes.core.k8s_info:
-    api_version: operators.coreos.com/v1alpha1
-    kind: ClusterServiceVersion
-    namespace: "{{ item.namespace }}"
-    label_selectors:
-    - "operators.coreos.com/{{ item.operator }}"
-  loop:
-  - operator: kubevirt-hyperconverged.openshift-cnv
-    namespace: openshift-cnv
-  # - operator: multicluster-engine.multicluster-engine
-  #   namespace: multicluster-engine
-  loop_control:
-    label: "{{ item.operator }}"
-  register: r_csv_wait
-  until:
-  - r_csv_wait.resources | length > 0
-  - r_csv_wait.resources[0].status.phase | default('') == 'Succeeded'
-  retries: 60
-  delay: 30
-
-- name: "OSAC Phase 2: Install prerequisites"
-  delegate_to: "{{ _bastion_host }}"
-  environment:
-    KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
-  ansible.builtin.shell:
-    cmd: >-
-      set -o pipefail;
-      make install-prereqs
-      VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
-      INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
-      2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
-    chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
-  changed_when: true
-
-- name: Wait for lvms-vg1 StorageClass to be available
+- name: Make lvms-vg1 the default StorageClass
   when: ocp4_workload_osac_lvms_enabled | bool
-  kubernetes.core.k8s_info:
-    api_version: storage.k8s.io/v1
-    kind: StorageClass
-    name: lvms-vg1
-  register: r_lvms_sc
-  until: r_lvms_sc.resources | length > 0
-  retries: 60
-  delay: 10
+  block:
+  - name: Get all StorageClasses
+    kubernetes.core.k8s_info:
+      api_version: storage.k8s.io/v1
+      kind: StorageClass
+    register: r_all_storage_classes
 
-- name: Get all StorageClasses
-  when: ocp4_workload_osac_lvms_enabled | bool
-  kubernetes.core.k8s_info:
-    api_version: storage.k8s.io/v1
-    kind: StorageClass
-  register: r_all_storage_classes
+  - name: Remove default annotation from non-LVMS StorageClasses
+    when:
+    - item.metadata.annotations is defined
+    - item.metadata.annotations['storageclass.kubernetes.io/is-default-class'] | default('false') == 'true'
+    - item.metadata.name != 'lvms-vg1'
+    kubernetes.core.k8s:
+      state: patched
+      api_version: storage.k8s.io/v1
+      kind: StorageClass
+      name: "{{ item.metadata.name }}"
+      definition:
+        metadata:
+          annotations:
+            storageclass.kubernetes.io/is-default-class: "false"
+    loop: "{{ r_all_storage_classes.resources | default([]) }}"
+    loop_control:
+      label: "{{ item.metadata.name }}"
 
-- name: Remove default annotation from non-LVMS StorageClasses
-  when:
-  - ocp4_workload_osac_lvms_enabled | bool
-  - item.metadata.annotations is defined
-  - item.metadata.annotations['storageclass.kubernetes.io/is-default-class'] | default('false') == 'true'
-  - item.metadata.name != 'lvms-vg1'
-  kubernetes.core.k8s:
-    state: patched
-    api_version: storage.k8s.io/v1
-    kind: StorageClass
-    name: "{{ item.metadata.name }}"
-    definition:
-      metadata:
-        annotations:
-          storageclass.kubernetes.io/is-default-class: "false"
-  loop: "{{ r_all_storage_classes.resources | default([]) }}"
-  loop_control:
-    label: "{{ item.metadata.name }}"
+  - name: Set lvms-vg1 as default StorageClass
+    kubernetes.core.k8s:
+      state: patched
+      api_version: storage.k8s.io/v1
+      kind: StorageClass
+      name: lvms-vg1
+      definition:
+        metadata:
+          annotations:
+            storageclass.kubernetes.io/is-default-class: "true"
 
-- name: Set lvms-vg1 as default StorageClass
-  when: ocp4_workload_osac_lvms_enabled | bool
-  kubernetes.core.k8s:
-    state: patched
-    api_version: storage.k8s.io/v1
-    kind: StorageClass
-    name: lvms-vg1
-    definition:
-      metadata:
-        annotations:
-          storageclass.kubernetes.io/is-default-class: "true"
-
-- name: "OSAC Phase 3: Install OSAC"
+- name: "OSAC Phase 2: Install OSAC"
   delegate_to: "{{ _bastion_host }}"
   environment:
     KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
@@ -106,8 +61,9 @@
     cmd: >-
       set -o pipefail;
       make install-osac
-      VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
-      INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
+      PLATFORM=openshift
+      PROFILE={{ ocp4_workload_osac_installer_profile }}
+      NS={{ ocp4_workload_osac_namespace }}
       2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
     chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
   changed_when: true
