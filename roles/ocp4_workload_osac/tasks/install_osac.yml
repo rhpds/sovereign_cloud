@@ -1,15 +1,16 @@
 ---
 # ponytail: no async — async+delegate_to is broken in AAP; tee keeps SSH alive
-- name: "OSAC Phase 1: Install operators"
+- name: "OSAC Phase 1: Install infra"
   delegate_to: "{{ _bastion_host }}"
   environment:
     KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
   ansible.builtin.shell:
     cmd: >-
       set -o pipefail;
-      make install-operators
-      VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
-      INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
+      make install-infra
+      PLATFORM=openshift
+      PROFILE={{ ocp4_workload_osac_installer_profile }}
+      NS={{ ocp4_workload_osac_namespace }}
       2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
     chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
   changed_when: true
@@ -34,20 +35,6 @@
   - r_csv_wait.resources[0].status.phase | default('') == 'Succeeded'
   retries: 60
   delay: 30
-
-- name: "OSAC Phase 2: Install prerequisites"
-  delegate_to: "{{ _bastion_host }}"
-  environment:
-    KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
-  ansible.builtin.shell:
-    cmd: >-
-      set -o pipefail;
-      make install-prereqs
-      VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
-      INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
-      2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
-    chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
-  changed_when: true
 
 - name: Wait for lvms-vg1 StorageClass to be available
   when: ocp4_workload_osac_lvms_enabled | bool
@@ -98,7 +85,7 @@
         annotations:
           storageclass.kubernetes.io/is-default-class: "true"
 
-- name: "OSAC Phase 3: Install OSAC"
+- name: "OSAC Phase 2: Install OSAC"
   delegate_to: "{{ _bastion_host }}"
   environment:
     KUBECONFIG: "/home/{{ ansible_user }}/.kube/config"
@@ -106,8 +93,9 @@
     cmd: >-
       set -o pipefail;
       make install-osac
-      VALUES_FILE={{ ocp4_workload_osac_installer_values_file }}
-      INSTALLER_NAMESPACE={{ ocp4_workload_osac_namespace }}
+      PLATFORM=openshift
+      PROFILE={{ ocp4_workload_osac_installer_profile }}
+      NS={{ ocp4_workload_osac_namespace }}
       2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
     chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
   changed_when: true

@@ -7,11 +7,18 @@
 - name: Setup Helm deployment options
   delegate_to: "{{ _bastion_host }}"
   block:
+  - name: Disable cert-manager deployment in operators chart (pre-installed via platform)
+    ansible.builtin.replace:
+      path: >-
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/{{ ocp4_workload_osac_installer_profile }}/infra.yaml
+      regexp: '(certManager:\n\s+enabled:\s+)\w+'
+      replace: '\g<1>false'
+
   - name: Disable LVM Storage in values file
     when: not ocp4_workload_osac_lvms_enabled | bool
     ansible.builtin.replace:
       path: >-
-        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/{{ ocp4_workload_osac_installer_values_file }}
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/{{ ocp4_workload_osac_installer_profile }}/infra.yaml
       regexp: '(lvms:\n\s+enabled:\s+)\w+'
       replace: '\g<1>false'
 
@@ -41,24 +48,17 @@
         regexp: openshift-storage
         replace: openshift-lvm-storage
 
-  - name: Disable cert-manager deployment in operators chart (pre-installed via platform)
-    ansible.builtin.replace:
-      path: >-
-        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/{{ ocp4_workload_osac_installer_values_file }}
-      regexp: '(certManager:\n\s+enabled:\s+)\w+'
-      replace: '\g<1>false'
-
   - name: Set osac-ui image tag to {{ ocp4_workload_osac_ui_image_tag }}
     ansible.builtin.replace:
       path: >-
-        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/{{ ocp4_workload_osac_installer_values_file }}
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/{{ ocp4_workload_osac_installer_profile }}/instance.yaml
       regexp: '(ghcr\.io/osac-project/osac-ui:)\S+'
       replace: '\g<1>{{ ocp4_workload_osac_ui_image_tag }}'
 
   - name: Set Keycloak admin credentials in values file
     ansible.builtin.lineinfile:
       path: >-
-        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/{{ ocp4_workload_osac_installer_values_file }}
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/{{ ocp4_workload_osac_installer_profile }}/infra.yaml
       insertafter: '^keycloak:'
       regexp: '^\s+{{ item.key }}:'
       line: '  {{ item.key }}: {{ item.value }}'
