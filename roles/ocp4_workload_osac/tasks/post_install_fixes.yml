@@ -114,40 +114,40 @@
     _ocp4_workload_osac_kc_admin_password: >-
       {{ _ocp4_workload_osac_admin_password if r_kc_auth_test.status == 200 else 'admin' }}
 
-- name: Configure osac-ui Keycloak client
-  community.general.keycloak_client:
-    auth_keycloak_url: "{{ _ocp4_workload_osac_kc_url }}"
-    auth_realm: master
-    auth_client_id: admin-cli
-    auth_username: "{{ _ocp4_workload_osac_kc_admin_user }}"
-    auth_password: "{{ _ocp4_workload_osac_kc_admin_password }}"
-    validate_certs: false
-    realm: osac
-    client_id: osac-ui
-    state: present
-    enabled: true
-    public_client: true
-    standard_flow_enabled: true
-    direct_access_grants_enabled: false
-    protocol: openid-connect
-    root_url: "{{ _ocp4_workload_osac_ui_url }}"
-    redirect_uris:
-    - "{{ _ocp4_workload_osac_ui_url }}/callback"
-    - "{{ _ocp4_workload_osac_ui_url }}/*"
-    web_origins:
-    - "{{ _ocp4_workload_osac_ui_url }}"
-    - "+"
-    attributes:
-      pkce.code.challenge.method: S256
-    default_client_scopes:
-    - profile
-    - email
-    - web-origins
-    client_scopes_behavior: patch
-  register: r_osac_ui_client
-  retries: 5
-  delay: 10
-  until: r_osac_ui_client is succeeded
+# - name: Configure osac-ui Keycloak client
+#   community.general.keycloak_client:
+#     auth_keycloak_url: "{{ _ocp4_workload_osac_kc_url }}"
+#     auth_realm: master
+#     auth_client_id: admin-cli
+#     auth_username: "{{ _ocp4_workload_osac_kc_admin_user }}"
+#     auth_password: "{{ _ocp4_workload_osac_kc_admin_password }}"
+#     validate_certs: false
+#     realm: osac
+#     client_id: osac-ui
+#     state: present
+#     enabled: true
+#     public_client: true
+#     standard_flow_enabled: true
+#     direct_access_grants_enabled: false
+#     protocol: openid-connect
+#     root_url: "{{ _ocp4_workload_osac_ui_url }}"
+#     redirect_uris:
+#     - "{{ _ocp4_workload_osac_ui_url }}/callback"
+#     - "{{ _ocp4_workload_osac_ui_url }}/*"
+#     web_origins:
+#     - "{{ _ocp4_workload_osac_ui_url }}"
+#     - "+"
+#     attributes:
+#       pkce.code.challenge.method: S256
+#     default_client_scopes:
+#     - profile
+#     - email
+#     - web-origins
+#     client_scopes_behavior: patch
+#   register: r_osac_ui_client
+#   retries: 5
+#   delay: 10
+#   until: r_osac_ui_client is succeeded
 
 # trust-manager Bundle needs: OSAC internal CA + system CAs (Google Trust Services,
 # ISRG/Let's Encrypt, etc.).  useDefaultCAs: true covers all public root CAs used

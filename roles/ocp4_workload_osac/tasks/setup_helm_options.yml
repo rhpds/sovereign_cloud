@@ -21,14 +21,7 @@
     - name: Patch LVMS operator chart namespace to openshift-lvm-storage
       ansible.builtin.replace:
         path: >-
-          ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-operators/templates/lvms.yaml
-        regexp: openshift-storage
-        replace: openshift-lvm-storage
-
-    - name: Patch LVMS configure-lvms.sh namespace to openshift-lvm-storage
-      ansible.builtin.replace:
-        path: >-
-          ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-prereqs/files/hooks/configure-lvms.sh
+          ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-deps/templates/lvms.yaml
         regexp: openshift-storage
         replace: openshift-lvm-storage
 
@@ -37,9 +30,16 @@
       ansible.builtin.template:
         src: lvms-cluster-config.yaml.j2
         dest: >-
-          ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-prereqs/templates/lvms.yaml
+          ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-deps/templates/lvms.yaml
         owner: "{{ ansible_user }}"
         mode: ug=rw,o=r
+
+    - name: Patch LVMS configure-lvms.sh namespace to openshift-lvm-storage
+      ansible.builtin.replace:
+        path: >-
+          ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-infra/files/hooks/configure-lvms.sh
+        regexp: openshift-storage
+        replace: openshift-lvm-storage
 
   - name: Disable cert-manager deployment in operators chart (pre-installed via platform)
     ansible.builtin.replace:

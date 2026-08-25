@@ -61,3 +61,5 @@
       osac_fullfillment_api_url: "{{ _ocp4_workload_osac_fullfillment_api_url }}"
       osac_aap_url: "{{ _ocp4_workload_osac_aap_url }}"
       osac_keycloak_url: "{{ _ocp4_workload_osac_keycloak_url }}"
+      osac_keycloak_admin_user: "{{ _ocp4_workload_osac_kc_admin_user }}"
+      osac_keycloak_admin_password: "{{ _ocp4_workload_osac_kc_admin_password }}"
