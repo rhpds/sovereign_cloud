@@ -73,8 +73,8 @@
     ansible.builtin.replace:
       path: >-
         ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-infra/templates/keycloak/resources.yaml
-      regexp: 'print\(json\.load\(sys\.stdin\)\[0\]\[.id.\]\)\)'
-      replace: "data=json.load(sys.stdin); print(data[0]['id']) if data else print(''))"
+      regexp: 'import sys,json; print\(json\.load\(sys\.stdin\)\[0\]\[.id.\]\)'
+      replace: "import sys,json; d=json.load(sys.stdin); print(d[0]['id'] if d else '')"
 
   - name: Patch keycloak set-passwords script - skip missing users gracefully
     ansible.builtin.replace:
