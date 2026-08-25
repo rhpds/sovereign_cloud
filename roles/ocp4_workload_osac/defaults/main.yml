@@ -20,6 +20,9 @@ ocp4_workload_osac_helm_mirror: https://mirror.openshift.com/pub/openshift-v4/cl
 ocp4_workload_osac_lvms_enabled: false
 # Disks to use for LVMS deviceSelector. Empty = use all available disks.
 ocp4_workload_osac_lvms_disks: []
+# ocp4_workload_osac_lvms_disks:
+# - /dev/vdb
+# - /dev/vdc
 
 # OSAC UI image tag
 ocp4_workload_osac_ui_image_tag: main
