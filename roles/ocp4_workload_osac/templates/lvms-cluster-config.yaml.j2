@@ -4,7 +4,7 @@ kind: ConfigMap
 metadata:
   name: osac-prereqs-lvms-config
   labels:
-    {{- include "osac-prereqs.labels" . | nindent 4 }}
+    {% raw %}{{- include "osac-prereqs.labels" . | nindent 4 }}{% endraw %}
   annotations:
     "helm.sh/hook": pre-install,pre-upgrade
     "helm.sh/hook-delete-policy": before-hook-creation
