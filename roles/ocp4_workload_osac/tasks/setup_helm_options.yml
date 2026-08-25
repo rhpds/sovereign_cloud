@@ -62,6 +62,27 @@
       regexp: '(ghcr\.io/osac-project/osac-ui:)\S+'
       replace: '\g<1>{{ ocp4_workload_osac_ui_image_tag }}'
 
+  - name: Patch keycloak set-passwords script - exact user lookup
+    ansible.builtin.replace:
+      path: >-
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-infra/templates/keycloak/resources.yaml
+      regexp: 'users\?username=\$username"'
+      replace: 'users?username=$username&exact=true"'
+
+  - name: Patch keycloak set-passwords script - safe Python indexing
+    ansible.builtin.replace:
+      path: >-
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-infra/templates/keycloak/resources.yaml
+      regexp: 'print\(json\.load\(sys\.stdin\)\[0\]\[.id.\]\)\)'
+      replace: "data=json.load(sys.stdin); print(data[0]['id']) if data else print(''))"
+
+  - name: Patch keycloak set-passwords script - skip missing users gracefully
+    ansible.builtin.replace:
+      path: >-
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/charts/osac-infra/templates/keycloak/resources.yaml
+      regexp: 'Could not find user.*return 1'
+      replace: 'User $username not found, skipping"; return 0'
+
   - name: Set Keycloak admin credentials in values file
     ansible.builtin.lineinfile:
       path: >-
