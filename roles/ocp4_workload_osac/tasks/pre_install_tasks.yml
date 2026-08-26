@@ -115,5 +115,5 @@
   - name: Copy AAP license from Execution Environment to the Installer directory
     ansible.builtin.copy:
       src: /tmp/aap-license.zip
-      dest: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}//values/{{ ocp4_workload_osac_installer_profile }}"
+      dest: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}//values/{{ ocp4_workload_osac_installer_profile }}/license.zip"
       mode: ug=rw,go=r
