@@ -50,7 +50,8 @@
         regexp: openshift-storage
         replace: openshift-lvm-storage
 
-  - name: Set osac-ui image tag to {{ ocp4_workload_osac_ui_image_tag }}
+  - name: Set osac-ui image tag to {{ ocp4_workload_osac_ui_image_tag | default('') }}
+    when: ocp4_workload_osac_ui_image_tag | default('') | length > 0
     ansible.builtin.replace:
       path: >-
         ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/{{ ocp4_workload_osac_installer_profile }}/instance.yaml

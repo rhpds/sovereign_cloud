@@ -24,8 +24,9 @@ ocp4_workload_osac_lvms_disks: []
 # - /dev/vdb
 # - /dev/vdc
 
-# OSAC UI image tag
-ocp4_workload_osac_ui_image_tag: main
+# OSAC UI image tag (empty = use version from the repo)
+ocp4_workload_osac_ui_image_tag: ""
+# ocp4_workload_osac_ui_image_tag: main
 
 # ------------------------------------------------
 # OSAC Credentials
