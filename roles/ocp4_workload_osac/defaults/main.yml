@@ -38,8 +38,11 @@ ocp4_workload_osac_user_password: ""
 # ------------------------------------------------
 # osac CLI
 # ------------------------------------------------
+# One of the two - TBD which one it will be for real. v0.0.93 is the second option.
 # https://github.com/osac-project/osac/releases/download/fulfillment-service%2Fv0.0.87/osac_Linux_x86_64
-ocp4_workload_osac_cli_version: v0.0.90
+# https://github.com/osac-project/osac/releases/download/v0.0.93/osac_Linux_x86_64
+ocp4_workload_osac_cli_release_url: https://github.com/osac-project/osac/releases/download
+ocp4_workload_osac_cli_version: v0.0.93
 
 # ------------------------------------------------
 # Storage classes for Ceph (tenant patching)
