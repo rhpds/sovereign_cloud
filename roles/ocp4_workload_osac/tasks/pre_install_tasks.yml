@@ -2,7 +2,7 @@
 - name: Set Helm download URL
   ansible.builtin.set_fact:
     _ocp4_workload_osac_helm_url: >-
-      {{ '{0}/helm/latest/helm-linux-amd64.tar.gz'.format(ocp4_workload_osac_helm_mirror) }}
+      {{ '{0}/helm/{1}/helm-linux-amd64.tar.gz'.format(ocp4_workload_osac_helm_mirror, ocp4_workload_osac_helm_version) }}
 
 - name: Download AAP license from S3 into the Execution Environment
   amazon.aws.s3_object:
