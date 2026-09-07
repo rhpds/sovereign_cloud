@@ -86,7 +86,7 @@
 
     - name: Install OSAC CLI
       ansible.builtin.get_url:
-        url: "{{ ocp4_workload_osac_cli_release_url }}"
+        url: "{{ ocp4_workload_osac_cli_url }}"
         dest: /usr/local/bin/osac
         mode: ug=rwx,o=rx
         owner: root
