@@ -15,7 +15,10 @@ ocp4_workload_osac_installer_profile: vmaas-ci
 
 # Helm binary mirror
 ocp4_workload_osac_helm_mirror: https://mirror.openshift.com/pub/openshift-v4/clients
-ocp4_workload_osac_helm_version: "4.2.3"
+ocp4_workload_osac_helm_version: "3.21.2"
+
+# BMF (Bare Metal Fulfillment) operator - requires a real bare-metal backend (BCM or Metal3)
+ocp4_workload_osac_bmf_enabled: false
 
 # Use LVMS if true
 ocp4_workload_osac_lvms_enabled: false

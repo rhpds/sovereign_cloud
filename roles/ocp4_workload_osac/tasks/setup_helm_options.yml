@@ -9,6 +9,14 @@
       regexp: '(certManager:\n\s+enabled:\s+)\w+'
       replace: '\g<1>false'
 
+  - name: Disable BMF operator (no bare-metal backend configured)
+    when: not ocp4_workload_osac_bmf_enabled | bool
+    ansible.builtin.replace:
+      path: >-
+        ~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}/values/{{ ocp4_workload_osac_installer_profile }}/instance.yaml
+      regexp: '(bmf:\n\s+enabled:\s+)\w+'
+      replace: '\g<1>false'
+
   - name: Disable LVM Storage in infra values file
     when: not ocp4_workload_osac_lvms_enabled | bool
     ansible.builtin.replace:
