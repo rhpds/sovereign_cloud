@@ -133,11 +133,10 @@
   # ponytail: OpenShift's pod-security-admission-label-synchronization-controller owns these labels;
   # chart setting them causes server-side apply field ownership conflicts
   - name: Strip pod-security labels from chart namespace templates
-    ansible.builtin.shell:
-      cmd: >-
-        set -o pipefail;
-        grep -rl 'pod-security\.kubernetes\.io' charts/ --include='*.yaml'
-        | xargs -r sed -i '/pod-security\.kubernetes\.io/d'
-      chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
-    changed_when: true
-    failed_when: false
+    ansible.builtin.replace:
+      path: "{{ item.path }}"
+      regexp: '^\s*pod-security\.kubernetes\.io/[^:]+:.*\n'
+      replace: ''
+    loop: "{{ r_hook_files.files }}"
+    loop_control:
+      label: "{{ item.path | basename }}"
