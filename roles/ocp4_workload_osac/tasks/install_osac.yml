@@ -1,5 +1,6 @@
 ---
 # ponytail: no async — async+delegate_to is broken in AAP; tee keeps SSH alive
+# ponytail: retry handles trust-manager webhook not ready between osac-deps and osac-infra helm installs
 - name: "OSAC Phase 1: Install infra"
   delegate_to: "{{ _bastion_host }}"
   environment:
@@ -13,6 +14,10 @@
       NS={{ ocp4_workload_osac_namespace }}
       2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
     chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
+  register: r_install_infra
+  until: r_install_infra.rc == 0
+  retries: 2
+  delay: 60
   changed_when: true
 
 - name: Make lvms-vg1 the default StorageClass
