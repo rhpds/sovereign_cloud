@@ -14,6 +14,13 @@
 - name: Call install_osac.yml
   ansible.builtin.include_tasks: install_osac.yml
 
+- name: Call install_virtctl.yml
+  when: ocp4_workload_osac_install_virtctl | default(false) | bool
+  delegate_to: "{{ _bastion_host | default('localhost') }}"
+  vars:
+    ansible_ssh_extra_args: "-F /dev/null"
+  ansible.builtin.include_tasks: install_virtctl.yml
+
 - name: Call post_install_fixes.yml
   ansible.builtin.include_tasks: post_install_fixes.yml
 

@@ -17,6 +17,9 @@ ocp4_workload_osac_installer_profile: vmaas-ci
 ocp4_workload_osac_helm_mirror: https://mirror.openshift.com/pub/openshift-v4/clients
 ocp4_workload_osac_helm_version: "3.21.2"
 
+# Install virtctl on the bastion hose
+ocp4_workload_osac_install_virtctl: true
+
 # BMF (Bare Metal Fulfillment) operator - requires a real bare-metal backend (BCM or Metal3)
 ocp4_workload_osac_bmf_enabled: false
 
