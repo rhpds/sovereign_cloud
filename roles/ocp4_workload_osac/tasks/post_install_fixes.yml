@@ -193,6 +193,7 @@
           insecureEdgeTerminationPolicy: Redirect
           destinationCACertificate: "{{ r_default_ca_secret.resources[0].data['ca.crt'] | b64decode }}"
 
+# https://redhat.atlassian.net/browse/OSAC-4795
 # Clear vault endpoint from fulfillment deployments so they start without Vault
 - name: Read fulfillment deployments for vault-endpoint patch
   kubernetes.core.k8s_info:

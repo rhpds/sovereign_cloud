@@ -21,6 +21,9 @@
 
 - name: Install virtctl
   become: true
+  delegate_to: "{{ _bastion_host | default('localhost') }}"
+  vars:
+    ansible_ssh_extra_args: "-F /dev/null"
   block:
   - name: Download virtctl cli tool
     ansible.builtin.get_url:
