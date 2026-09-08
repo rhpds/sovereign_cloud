@@ -193,6 +193,43 @@
           insecureEdgeTerminationPolicy: Redirect
           destinationCACertificate: "{{ r_default_ca_secret.resources[0].data['ca.crt'] | b64decode }}"
 
+# Clear vault endpoint from fulfillment deployments so they start without Vault
+- name: Read fulfillment deployments for vault-endpoint patch
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ item }}"
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+  loop:
+  - fulfillment-controller
+  - fulfillment-grpc-server
+  register: r_fulfillment_deploys
+
+- name: Clear --vault-endpoint from fulfillment container commands
+  vars:
+    _deploy: "{{ item.resources[0] }}"
+    _container: "{{ _deploy.spec.template.spec.containers[0] }}"
+    _patched_cmd: >-
+      {{ _container.command | default([])
+         | map('regex_replace', '^--vault-endpoint=.+', '--vault-endpoint=')
+         | list }}
+  kubernetes.core.k8s:
+    state: patched
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ _deploy.metadata.name }}"
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    definition:
+      spec:
+        template:
+          spec:
+            containers:
+            - name: "{{ _container.name }}"
+              command: "{{ _patched_cmd }}"
+  loop: "{{ r_fulfillment_deploys.results }}"
+  loop_control:
+    label: "{{ _deploy.metadata.name }}"
+
 # Patch ConfigMap BEFORE the restart so the pod picks up the correct URL on start.
 - name: Patch osac-ui ConfigMap fulfillment URL to internal service
   kubernetes.core.k8s:

@@ -11,14 +11,25 @@
   retries: 30
   delay: 10
 
-- name: Get Fullfillment API Route URL
+- name: Get external fulfillment API Route URL
   kubernetes.core.k8s_info:
     api_version: route.openshift.io/v1
     kind: Route
     name: fulfillment-api
     namespace: "{{ ocp4_workload_osac_namespace }}"
-  register: r_fullfillment_api_route
-  until: r_fullfillment_api_route.resources | length > 0
+  register: r_fulfillment_api_route
+  until: r_fulfillment_api_route.resources | length > 0
+  retries: 30
+  delay: 10
+
+- name: Get internal fulfillment API Route URL
+  kubernetes.core.k8s_info:
+    api_version: route.openshift.io/v1
+    kind: Route
+    name: fulfillment-internal-api
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+  register: r_fulfillment_internal_api_route
+  until: r_fulfillment_internal_api_route.resources | length > 0
   retries: 30
   delay: 10
 
@@ -47,7 +58,8 @@
 - name: Set URL facts
   ansible.builtin.set_fact:
     _ocp4_workload_osac_ui_url: "https://{{ r_osac_ui_route.resources[0].spec.host }}"
-    _ocp4_workload_osac_fullfillment_api_url: "https://{{ r_fullfillment_api_route.resources[0].spec.host }}"
+    _ocp4_workload_osac_fulfillment_api_url: "https://{{ r_fulfillment_api_route.resources[0].spec.host }}"
+    _ocp4_workload_osac_fulfillment_internal_api_url: "https://{{ r_fulfillment_internal_api_route.resources[0].spec.host }}"
     _ocp4_workload_osac_aap_url: "https://{{ r_osac_aap_route.resources[0].spec.host }}"
     _ocp4_workload_osac_keycloak_url: "https://{{ r_keycloak_route.resources[0].spec.host }}"
 
@@ -58,7 +70,8 @@
       osac_admin_user: "{{ ocp4_workload_osac_admin_user }}"
       osac_admin_password: "{{ _ocp4_workload_osac_admin_password }}"
       osac_user_password: "{{ _ocp4_workload_osac_user_password }}"
-      osac_fullfillment_api_url: "{{ _ocp4_workload_osac_fullfillment_api_url }}"
+      osac_fulfillment_api_url: "{{ _ocp4_workload_osac_fulfillment_api_url }}"
+      osac_fulfillment_internal_api_url: "{{ _ocp4_workload_osac_fulfillment_internal_api_url }}"
       osac_aap_url: "{{ _ocp4_workload_osac_aap_url }}"
       osac_keycloak_url: "{{ _ocp4_workload_osac_keycloak_url }}"
       osac_keycloak_admin_user: "{{ _ocp4_workload_osac_kc_admin_user }}"
