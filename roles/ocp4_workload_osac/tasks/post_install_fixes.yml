@@ -92,27 +92,27 @@
           insecureEdgeTerminationPolicy: Redirect
           destinationCACertificate: "{{ r_kc_tls_secret.resources[0].data['ca.crt'] | b64decode }}"
 
-# - name: Test Keycloak admin credentials (configured user)
-#   ansible.builtin.uri:
-#     url: "{{ _ocp4_workload_osac_kc_url }}/realms/master/protocol/openid-connect/token"
-#     method: POST
-#     body_format: form-urlencoded
-#     body:
-#       grant_type: password
-#       client_id: admin-cli
-#       username: "{{ ocp4_workload_osac_admin_user }}"
-#       password: "{{ _ocp4_workload_osac_admin_password }}"
-#     validate_certs: false
-#     status_code: [200, 400, 401]
-#   register: r_kc_auth_test
-#   failed_when: false
+- name: Test Keycloak admin credentials (configured user)
+  ansible.builtin.uri:
+    url: "{{ _ocp4_workload_osac_kc_url }}/realms/master/protocol/openid-connect/token"
+    method: POST
+    body_format: form-urlencoded
+    body:
+      grant_type: password
+      client_id: admin-cli
+      username: "{{ ocp4_workload_osac_admin_user }}"
+      password: "{{ _ocp4_workload_osac_admin_password }}"
+    validate_certs: false
+    status_code: [200, 400, 401]
+  register: r_kc_auth_test
+  failed_when: false
 
-# - name: Set effective Keycloak admin credentials
-#   ansible.builtin.set_fact:
-#     _ocp4_workload_osac_kc_admin_user: >-
-#       {{ ocp4_workload_osac_admin_user if r_kc_auth_test.status == 200 else 'admin' }}
-#     _ocp4_workload_osac_kc_admin_password: >-
-#       {{ _ocp4_workload_osac_admin_password if r_kc_auth_test.status == 200 else 'admin' }}
+- name: Set effective Keycloak admin credentials
+  ansible.builtin.set_fact:
+    _ocp4_workload_osac_kc_admin_user: >-
+      {{ ocp4_workload_osac_admin_user if r_kc_auth_test.status == 200 else 'admin' }}
+    _ocp4_workload_osac_kc_admin_password: >-
+      {{ _ocp4_workload_osac_admin_password if r_kc_auth_test.status == 200 else 'admin' }}
 
 - name: Configure osac-ui Keycloak client
   community.general.keycloak_client:
