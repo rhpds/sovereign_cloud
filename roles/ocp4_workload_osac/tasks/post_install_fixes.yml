@@ -149,6 +149,143 @@
   delay: 10
   until: r_osac_ui_client is succeeded
 
+# --------------------------------------------------------------
+# Switch osac realm browser flow to combined username+password form
+# (shows both fields on one page instead of username-only first page)
+# --------------------------------------------------------------
+- name: Get Keycloak admin token for browser flow update
+  ansible.builtin.uri:
+    url: "{{ _ocp4_workload_osac_kc_url }}/realms/master/protocol/openid-connect/token"
+    method: POST
+    body_format: form-urlencoded
+    body:
+      grant_type: password
+      client_id: admin-cli
+      username: "{{ _ocp4_workload_osac_kc_admin_user }}"
+      password: "{{ _ocp4_workload_osac_kc_admin_password }}"
+    validate_certs: false
+  register: r_kc_flow_token
+
+- name: Get browser flow executions for osac realm
+  ansible.builtin.uri:
+    url: >-
+      {{ _ocp4_workload_osac_kc_url }}/admin/realms/osac/authentication/flows/browser/executions
+    method: GET
+    headers:
+      Authorization: "Bearer {{ r_kc_flow_token.json.access_token }}"
+    validate_certs: false
+  register: r_browser_execs
+
+- name: Check if browser flow already uses combined username-password form
+  ansible.builtin.set_fact:
+    _kc_has_combined_form: >-
+      {{ r_browser_execs.json
+         | selectattr('providerId', 'defined')
+         | selectattr('providerId', 'equalto', 'auth-username-password-form')
+         | list | length > 0 }}
+
+- name: Replace username-only form with combined username-password form
+  when: not _kc_has_combined_form | bool
+  block:
+  - name: Find username-only execution and forms subflow
+    ansible.builtin.set_fact:
+      _kc_username_exec: >-
+        {{ r_browser_execs.json
+           | selectattr('providerId', 'defined')
+           | selectattr('providerId', 'equalto', 'auth-username-form')
+           | first }}
+      _kc_forms_subflow_exec: >-
+        {{ r_browser_execs.json
+           | selectattr('authenticationFlow', 'defined')
+           | selectattr('authenticationFlow', 'equalto', true)
+           | selectattr('displayName', 'search', '[Ff]orm')
+           | first }}
+
+  - name: Get authentication flows to resolve forms subflow alias
+    ansible.builtin.uri:
+      url: "{{ _ocp4_workload_osac_kc_url }}/admin/realms/osac/authentication/flows"
+      method: GET
+      headers:
+        Authorization: "Bearer {{ r_kc_flow_token.json.access_token }}"
+      validate_certs: false
+    register: r_all_flows
+
+  - name: Resolve forms subflow alias
+    ansible.builtin.set_fact:
+      _kc_forms_alias: >-
+        {{ (r_all_flows.json
+            | selectattr('id', 'equalto', _kc_forms_subflow_exec.flowId)
+            | first).alias }}
+
+  - name: Delete username-only form execution
+    ansible.builtin.uri:
+      url: >-
+        {{ _ocp4_workload_osac_kc_url }}/admin/realms/osac/authentication/executions/{{ _kc_username_exec.id }}
+      method: DELETE
+      headers:
+        Authorization: "Bearer {{ r_kc_flow_token.json.access_token }}"
+      validate_certs: false
+      status_code: [204]
+
+  - name: Add combined username-password form to browser forms subflow
+    ansible.builtin.uri:
+      url: >-
+        {{ _ocp4_workload_osac_kc_url }}/admin/realms/osac/authentication/flows/{{
+        _kc_forms_alias | urlencode }}/executions/execution
+      method: POST
+      headers:
+        Authorization: "Bearer {{ r_kc_flow_token.json.access_token }}"
+      body_format: json
+      body:
+        provider: auth-username-password-form
+      validate_certs: false
+      status_code: [201]
+
+  - name: Re-read browser flow executions after modification
+    ansible.builtin.uri:
+      url: >-
+        {{ _ocp4_workload_osac_kc_url }}/admin/realms/osac/authentication/flows/browser/executions
+      method: GET
+      headers:
+        Authorization: "Bearer {{ r_kc_flow_token.json.access_token }}"
+      validate_certs: false
+    register: r_browser_execs_new
+
+  - name: Find combined form execution in updated list
+    ansible.builtin.set_fact:
+      _kc_combined_exec: >-
+        {{ r_browser_execs_new.json
+           | selectattr('providerId', 'defined')
+           | selectattr('providerId', 'equalto', 'auth-username-password-form')
+           | first }}
+
+  - name: Set combined form execution to REQUIRED
+    ansible.builtin.uri:
+      url: >-
+        {{ _ocp4_workload_osac_kc_url }}/admin/realms/osac/authentication/flows/browser/executions
+      method: PUT
+      headers:
+        Authorization: "Bearer {{ r_kc_flow_token.json.access_token }}"
+      body_format: json
+      body: "{{ _kc_combined_exec | combine({'requirement': 'REQUIRED'}) }}"
+      validate_certs: false
+      status_code: [202, 204]
+
+  - name: Raise combined form priority to top of subflow
+    when: (_kc_combined_exec.index | default(0) | int) > 0
+    ansible.builtin.uri:
+      url: >-
+        {{ _ocp4_workload_osac_kc_url }}/admin/realms/osac/authentication/executions/{{
+        _kc_combined_exec.id }}/raise-priority
+      method: POST
+      headers:
+        Authorization: "Bearer {{ r_kc_flow_token.json.access_token }}"
+      validate_certs: false
+      status_code: [204]
+    loop: "{{ range(_kc_combined_exec.index | default(0) | int) | list }}"
+    loop_control:
+      label: "raise {{ item + 1 }}"
+
 # trust-manager Bundle needs: OSAC internal CA + system CAs (Google Trust Services,
 # ISRG/Let's Encrypt, etc.).  useDefaultCAs: true covers all public root CAs used
 # by the ingress wildcard cert, so the ingress CA chain is already trusted.
