@@ -11,8 +11,8 @@
 - name: Call setup_helm_options.yml
   ansible.builtin.include_tasks: setup_helm_options.yml
 
-# - name: Call install_osac.yml
-#   ansible.builtin.include_tasks: install_osac.yml
+- name: Call install_osac.yml
+  ansible.builtin.include_tasks: install_osac.yml
 
 - name: Call install_virtctl.yml
   when: ocp4_workload_osac_install_virtctl | default(false) | bool
