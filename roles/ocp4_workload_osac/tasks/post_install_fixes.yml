@@ -85,40 +85,40 @@
     _ocp4_workload_osac_kc_admin_password: >-
       {{ _ocp4_workload_osac_admin_password if r_kc_auth_test.status == 200 else 'admin' }}
 
-- name: Configure osac-ui Keycloak client
-  community.general.keycloak_client:
-    auth_keycloak_url: "{{ _ocp4_workload_osac_kc_url }}"
-    auth_realm: master
-    auth_client_id: admin-cli
-    auth_username: "{{ _ocp4_workload_osac_kc_admin_user }}"
-    auth_password: "{{ _ocp4_workload_osac_kc_admin_password }}"
-    validate_certs: false
-    realm: osac
-    client_id: osac-ui
-    state: present
-    enabled: true
-    public_client: true
-    standard_flow_enabled: true
-    direct_access_grants_enabled: false
-    protocol: openid-connect
-    root_url: "{{ _ocp4_workload_osac_ui_url }}"
-    redirect_uris:
-    - "{{ _ocp4_workload_osac_ui_url }}/callback"
-    - "{{ _ocp4_workload_osac_ui_url }}/*"
-    web_origins:
-    - "{{ _ocp4_workload_osac_ui_url }}"
-    - "+"
-    attributes:
-      pkce.code.challenge.method: S256
-    default_client_scopes:
-    - profile
-    - email
-    - web-origins
-    client_scopes_behavior: patch
-  register: r_osac_ui_client
-  retries: 5
-  delay: 10
-  until: r_osac_ui_client is succeeded
+# - name: Configure osac-ui Keycloak client
+#   community.general.keycloak_client:
+#     auth_keycloak_url: "{{ _ocp4_workload_osac_kc_url }}"
+#     auth_realm: master
+#     auth_client_id: admin-cli
+#     auth_username: "{{ _ocp4_workload_osac_kc_admin_user }}"
+#     auth_password: "{{ _ocp4_workload_osac_kc_admin_password }}"
+#     validate_certs: false
+#     realm: osac
+#     client_id: osac-ui
+#     state: present
+#     enabled: true
+#     public_client: true
+#     standard_flow_enabled: true
+#     direct_access_grants_enabled: false
+#     protocol: openid-connect
+#     root_url: "{{ _ocp4_workload_osac_ui_url }}"
+#     redirect_uris:
+#     - "{{ _ocp4_workload_osac_ui_url }}/callback"
+#     - "{{ _ocp4_workload_osac_ui_url }}/*"
+#     web_origins:
+#     - "{{ _ocp4_workload_osac_ui_url }}"
+#     - "+"
+#     attributes:
+#       pkce.code.challenge.method: S256
+#     default_client_scopes:
+#     - profile
+#     - email
+#     - web-origins
+#     client_scopes_behavior: patch
+#   register: r_osac_ui_client
+#   retries: 5
+#   delay: 10
+#   until: r_osac_ui_client is succeeded
 
 # trust-manager Bundle needs: OSAC internal CA + system CAs (Google Trust Services,
 # ISRG/Let's Encrypt, etc.).  useDefaultCAs: true covers all public root CAs used
@@ -176,7 +176,24 @@
       data:
         FULFILLMENT_API_URL: "https://fulfillment-internal-api:8001"
 
-- name: Restart fulfillment ingress proxy, fulfillment gRPC server, and OSAC UI
+# Envoy's default nofile ulimit is too low for lab load; wrap the entrypoint so
+# ulimit is raised before envoy starts. Applied before the restart below.
+# This triggers a restart of the fulfillment-ingress-proxy pod.
+- name: Raise Envoy file descriptor limit on fulfillment-ingress-proxy
+  kubernetes.core.k8s_json_patch:
+    api_version: apps/v1
+    kind: Deployment
+    name: fulfillment-ingress-proxy
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    patch:
+    - op: replace
+      path: /spec/template/spec/containers/0/command
+      value:
+      - /bin/sh
+      - -c
+      - ulimit -n 524288 && exec envoy --config-path /etc/envoy/envoy.yaml
+
+- name: Restart fulfillment controller, gRPC server, and OSAC UI
   kubernetes.core.k8s:
     state: patched
     api_version: apps/v1
@@ -190,89 +207,6 @@
             annotations:
               kubectl.kubernetes.io/restartedAt: "{{ now(utc=true).isoformat() }}"
   loop:
-  - fulfillment-ingress-proxy
+  - fulfillment-controller
   - fulfillment-grpc-server
   - osac-ui
-
-# --------------------------------------------------------------
-# Restart fulfillment-controller first, then dedup VirtualNetworks.
-# Order matters: the FC restart triggers a startup burst that creates duplicate
-# VirtualNetwork CRs (informer cache empty on startup, same VN enqueued 2-3×).
-# We wait 30s for the burst to complete, then dedup catches and removes them.
-# --------------------------------------------------------------
-- name: Restart fulfillment controller to trigger Tenant sync
-  kubernetes.core.k8s:
-    state: patched
-    api_version: apps/v1
-    kind: Deployment
-    name: fulfillment-controller
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-    definition:
-      spec:
-        template:
-          metadata:
-            annotations:
-              kubectl.kubernetes.io/restartedAt: "{{ now(utc=true).isoformat() }}"
-
-- name: Wait for fulfillment-controller cache to warm after restart
-  ansible.builtin.pause:
-    seconds: 30
-
-# The osac-operator has a race condition that creates duplicate VirtualNetwork CRs
-# (same UUID label, generated names). Remove extras and re-trigger reconciliation.
-- name: Get all VirtualNetwork CRs
-  kubernetes.core.k8s_info:
-    api_version: osac.openshift.io/v1alpha1
-    kind: VirtualNetwork
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-  register: r_vns
-
-- name: Identify duplicate VirtualNetworks to delete (keep first name per UUID)
-  vars:
-    _sorted: "{{ r_vns.resources | sort(attribute='metadata.name') }}"
-    _names: "{{ _sorted | map(attribute='metadata.name') | list }}"
-    _uuids: "{{ _sorted | json_query('[].metadata.labels.\"osac.openshift.io/virtualnetwork-uuid\"') }}"
-    _keep: "{{ dict(_uuids[::-1] | zip(_names[::-1])) | dict2items | map(attribute='value') | list }}"
-  ansible.builtin.set_fact:
-    _duplicate_vns: "{{ _names | difference(_keep) }}"
-
-- name: Clear finalizers from duplicate VirtualNetworks
-  when: _duplicate_vns | length > 0
-  kubernetes.core.k8s:
-    state: patched
-    api_version: osac.openshift.io/v1alpha1
-    kind: VirtualNetwork
-    name: "{{ item }}"
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-    definition:
-      metadata:
-        finalizers: []
-  loop: "{{ _duplicate_vns }}"
-
-- name: Delete duplicate VirtualNetworks (wait for full removal)
-  when: _duplicate_vns | length > 0
-  kubernetes.core.k8s:
-    state: absent
-    api_version: osac.openshift.io/v1alpha1
-    kind: VirtualNetwork
-    name: "{{ item }}"
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-    wait: true
-    wait_timeout: 300
-  loop: "{{ _duplicate_vns }}"
-
-- name: Annotate remaining VirtualNetworks to trigger reconciliation
-  when: _duplicate_vns | length > 0
-  kubernetes.core.k8s:
-    state: patched
-    api_version: osac.openshift.io/v1alpha1
-    kind: VirtualNetwork
-    name: "{{ item.metadata.name }}"
-    namespace: "{{ ocp4_workload_osac_namespace }}"
-    definition:
-      metadata:
-        annotations:
-          reconcile.osac.openshift.io/ts: "{{ now(utc=true).isoformat() }}"
-  loop: "{{ r_vns.resources | rejectattr('metadata.name', 'in', _duplicate_vns) | list }}"
-  loop_control:
-    label: "{{ item.metadata.name }}"
