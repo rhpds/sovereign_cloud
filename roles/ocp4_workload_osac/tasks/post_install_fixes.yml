@@ -180,15 +180,12 @@
 # ulimit is raised before envoy starts. Applied before the restart below.
 # This triggers a restart of the fulfillment-ingress-proxy pod.
 - name: Raise Envoy file descriptor limit on fulfillment-ingress-proxy
-  kubernetes.core.k8s:
-    state: patched
+  kubernetes.core.k8s_json_patch:
     api_version: apps/v1
     kind: Deployment
     name: fulfillment-ingress-proxy
     namespace: "{{ ocp4_workload_osac_namespace }}"
-    merge_type:
-    - json
-    definition:
+    patch:
     - op: replace
       path: /spec/template/spec/containers/0/command
       value:
