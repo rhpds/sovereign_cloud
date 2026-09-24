@@ -176,6 +176,26 @@
       data:
         FULFILLMENT_API_URL: "https://fulfillment-internal-api:8001"
 
+# Envoy's default nofile ulimit is too low for lab load; wrap the entrypoint so
+# ulimit is raised before envoy starts. Applied before the restart below.
+# This triggers a restart of the fulfillment-ingress-proxy pod.
+- name: Raise Envoy file descriptor limit on fulfillment-ingress-proxy
+  kubernetes.core.k8s:
+    state: patched
+    api_version: apps/v1
+    kind: Deployment
+    name: fulfillment-ingress-proxy
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    merge_type:
+    - json
+    definition:
+    - op: replace
+      path: /spec/template/spec/containers/0/command
+      value:
+      - /bin/sh
+      - -c
+      - ulimit -n 524288 && exec envoy --config-path /etc/envoy/envoy.yaml
+
 - name: Restart fulfillment ingress proxy, fulfillment gRPC server, and OSAC UI
   kubernetes.core.k8s:
     state: patched
@@ -190,9 +210,9 @@
             annotations:
               kubectl.kubernetes.io/restartedAt: "{{ now(utc=true).isoformat() }}"
   loop:
-  - fulfillment-ingress-proxy
   - fulfillment-grpc-server
   - osac-ui
+  # - fulfillment-ingress-proxy
 
 # --------------------------------------------------------------
 # Restart fulfillment-controller first, then dedup VirtualNetworks.
