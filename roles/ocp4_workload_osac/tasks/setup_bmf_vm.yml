@@ -151,52 +151,49 @@
     loop_control:
       label: "{{ item.name }}"
 
-  - name: Create libvirt hooks directory
+  # A libvirt network hook can't be used: SELinux denies virtnetworkd_t executing virt_hook_t,
+  # and a failing hook breaks every VM attach. Remove any hook left by earlier role versions.
+  - name: Remove libvirt network hook
     ansible.builtin.file:
-      path: /etc/libvirt/hooks
+      path: /etc/libvirt/hooks/network
+      state: absent
+    register: _bmf_libvirt_hook
+
+  # virtnetworkd rebuilds table ip libvirt_network on start; the timer covers net-destroy/net-start
+  - name: Create virtnetworkd drop-in directory
+    ansible.builtin.file:
+      path: /etc/systemd/system/virtnetworkd.service.d
       state: directory
       mode: u=rwx,go=rx
 
-  - name: Install libvirt network hook to re-apply rules when libvirt rebuilds its table
+  - name: Re-apply OSAC BMF nftables rules whenever virtnetworkd starts
     ansible.builtin.copy:
-      dest: /etc/libvirt/hooks/network
-      mode: u=rwx,go=rx
+      dest: /etc/systemd/system/virtnetworkd.service.d/osac-nft.conf
+      mode: ug=rw,go=r
       owner: root
       group: root
       content: |
-        #!/bin/sh
-        # Managed by Ansible (ocp4_workload_osac)
-        # Called for every network event; must exit 0 or libvirt blocks VM port creation
-        if [ "$1" = default ] && [ "$2" = started ] && [ "$3" = begin ]; then
-          systemctl start --no-block osac-bmf-nft.service || true
-        fi
-        exit 0
-    register: _bmf_libvirt_hook
+        [Service]
+        ExecStartPost=-/usr/bin/systemctl start --no-block osac-bmf-nft.service
+    register: _bmf_virtnetworkd_dropin
 
-  # Files created via Ansible's temp dir keep the wrong SELinux label; libvirt then gets exit 126
-  - name: Restore SELinux labels on libvirt hooks
-    ansible.builtin.command: restorecon -Rv /etc/libvirt/hooks
-    register: _bmf_hook_restorecon
-    changed_when: _bmf_hook_restorecon.stdout | length > 0
-
-  - name: Self-test libvirt network hook exits 0 for handled and unhandled events
-    ansible.builtin.command: "/etc/libvirt/hooks/network default {{ item }} begin -"
-    loop:
-    - port-created
-    - started
-    changed_when: false
-
-  - name: Restart virtnetworkd so it picks up the network hook
-    when: _bmf_libvirt_hook is changed or _bmf_hook_restorecon is changed
+  - name: Restart virtnetworkd to drop the hook and load the drop-in
+    when: _bmf_libvirt_hook is changed or _bmf_virtnetworkd_dropin is changed
     ansible.builtin.systemd:
       name: virtnetworkd.service
       state: restarted
-
+      daemon_reload: true
   - name: Apply OSAC BMF nftables rules
     ansible.builtin.systemd:
       name: osac-bmf-nft.service
       state: restarted
       daemon_reload: true
+
+  - name: Verify libvirt guest_input allows Ironic :9999
+    ansible.builtin.command: nft list chain ip libvirt_network guest_input
+    register: _bmf_guest_input
+    changed_when: false
+    failed_when: "'tcp dport 9999' not in _bmf_guest_input.stdout"
 
   - name: Enable OSAC BMF nftables timer
     ansible.builtin.systemd:
