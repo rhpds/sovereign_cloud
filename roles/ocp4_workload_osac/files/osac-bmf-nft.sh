@@ -12,14 +12,24 @@ IRONIC_VIP=10.10.10.100
 batch=$(mktemp)
 trap 'rm -f "$batch"' EXIT
 
+# Create tables/chains only if missing so an existing chain's policy is left alone
+ensure_chain() {
+  local family=$1 table=$2 chain=$3 spec=$4
+  nft add table "$family" "$table"
+  nft list chain "$family" "$table" "$chain" >/dev/null 2>&1 ||
+    nft add chain "$family" "$table" "$chain" "{ $spec; }"
+}
+ensure_chain inet filter forward 'type filter hook forward priority filter'
+ensure_chain inet nat postrouting 'type nat hook postrouting priority srcnat'
+ensure_chain inet nat prerouting 'type nat hook prerouting priority dstnat'
+
 # Delete rules owned by previous runs (and any legacy :6180 DNAT)
 delete_owned() {
-  nft -a list chain "$@" 2>/dev/null |
+  { nft -a list chain "$@" 2>/dev/null || true; } |
     awk -v c="$*" '/comment "osac"/ || (c ~ /prerouting/ && /tcp dport 6180/) {print "delete rule " c " handle " $NF}'
 }
 
 {
-  echo 'add chain inet nat prerouting { type nat hook prerouting priority dstnat; }'
   delete_owned inet filter forward
   delete_owned inet nat postrouting
   delete_owned inet nat prerouting
@@ -51,11 +61,12 @@ EOF
     echo 'insert rule ip libvirt_network guest_input oif "virbr0" ip daddr 192.168.122.0/24 tcp dport 9999 accept comment "osac"'
     if ! nft list chain ip libvirt_network guest_nat | grep -q 'ct state new'; then
       cat <<'EOF'
-add rule ip libvirt_network guest_nat meta l4proto { tcp, udp } ip saddr 192.168.122.0/24 ip daddr != 192.168.122.0/24 ct state new masquerade to :1024-65535
+add rule ip libvirt_network guest_nat meta l4proto tcp ip saddr 192.168.122.0/24 ip daddr != 192.168.122.0/24 ct state new masquerade to :1024-65535
+add rule ip libvirt_network guest_nat meta l4proto udp ip saddr 192.168.122.0/24 ip daddr != 192.168.122.0/24 ct state new masquerade to :1024-65535
 add rule ip libvirt_network guest_nat ip saddr 192.168.122.0/24 ip daddr != 192.168.122.0/24 ct state new masquerade
 EOF
     fi
   fi
 } > "$batch"
 
-nft -f "$batch"
+nft -f "$batch" || { echo "nft batch failed:" >&2; cat "$batch" >&2; exit 1; }
