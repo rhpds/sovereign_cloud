@@ -131,11 +131,14 @@
         [Unit]
         Description=OSAC BMF forwarding and NAT rules
         Wants=network-online.target
-        After=network-online.target nftables.service
+        After=network-online.target nftables.service virtnetworkd.service
 
         [Service]
         Type=oneshot
         ExecStart=/usr/local/sbin/osac-bmf-nft
+
+        [Install]
+        WantedBy=multi-user.target
     # ponytail: timer re-probes which hub node serves metal3 :6180, so the DNAT follows the pod
     - name: osac-bmf-nft.timer
       content: |
@@ -195,11 +198,18 @@
     changed_when: false
     failed_when: "'tcp dport 9999' not in _bmf_guest_input.stdout"
 
-  - name: Enable OSAC BMF nftables timer
+  - name: Enable OSAC BMF nftables service and timer at boot
+    ansible.builtin.systemd:
+      name: "{{ item }}"
+      enabled: true
+    loop:
+    - osac-bmf-nft.service
+    - osac-bmf-nft.timer
+
+  - name: Start OSAC BMF nftables timer
     ansible.builtin.systemd:
       name: osac-bmf-nft.timer
       state: started
-      enabled: true
 
   # The on-disk nftables config is an empty template: a reload would wipe the lab ruleset
   - name: Read live nftables ruleset (without libvirt/firewalld tables)
@@ -222,3 +232,26 @@
     ansible.builtin.systemd:
       name: nftables.service
       enabled: true
+
+  # nftables.service flushes the whole ruleset on reload/restart, including libvirt's table.
+  # Restarting virtnetworkd rebuilds that table, and its drop-in re-runs osac-bmf-nft.
+  - name: Create nftables drop-in directory
+    ansible.builtin.file:
+      path: /etc/systemd/system/nftables.service.d
+      state: directory
+      mode: u=rwx,go=rx
+
+  - name: Rebuild libvirt and OSAC rules after nftables reload/restart
+    ansible.builtin.copy:
+      dest: /etc/systemd/system/nftables.service.d/osac-nft.conf
+      mode: ug=rw,go=r
+      owner: root
+      group: root
+      content: |
+        [Service]
+        ExecStartPost=-/usr/bin/systemctl try-restart --no-block virtnetworkd.service
+        ExecReload=-/usr/bin/systemctl try-restart --no-block virtnetworkd.service
+
+  - name: Reload systemd for the nftables drop-in
+    ansible.builtin.systemd:
+      daemon_reload: true
