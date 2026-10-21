@@ -28,12 +28,6 @@
   ansible.builtin.fail:
     msg: "No bastion host available - aborting installation."
 
-# - name: Remove macOS-only UseKeychain from SSH config
-#   ansible.builtin.lineinfile:
-#     path: /root/.ssh/config
-#     regexp: '(?i)^\s*UseKeychain\b'
-#     state: absent
-
 - name: Find bastion SSH private key
   delegate_to: "{{ _bastion_host }}"
   become: true

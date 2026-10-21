@@ -92,58 +92,114 @@
       state: started
       daemon_reload: true
 
-  - name: Read current nftables ruleset
-    ansible.builtin.command: nft list ruleset
-    register: _nft_ruleset
+  - name: Disable reverse path filtering for the asymmetric guest return path
+    ansible.builtin.copy:
+      dest: /etc/sysctl.d/99-osac-bmf.conf
+      mode: ug=rw,go=r
+      owner: root
+      group: root
+      content: |
+        net.ipv4.conf.all.rp_filter = 0
+        net.ipv4.conf.default.rp_filter = 0
+        net.ipv4.conf.enp2s0.rp_filter = 0
+        net.ipv4.conf.virbr0.rp_filter = 0
+    register: _bmf_sysctl
+
+  - name: Apply rp_filter settings
+    when: _bmf_sysctl is changed
+    ansible.builtin.command: sysctl -p /etc/sysctl.d/99-osac-bmf.conf
+    changed_when: true
+
+  - name: Install OSAC BMF nftables script
+    ansible.builtin.copy:
+      src: osac-bmf-nft.sh
+      dest: /usr/local/sbin/osac-bmf-nft
+      mode: u=rwx,go=rx
+      owner: root
+      group: root
+
+  - name: Write OSAC BMF nftables service and timer
+    ansible.builtin.copy:
+      dest: "/etc/systemd/system/{{ item.name }}"
+      mode: ug=rw,go=r
+      content: "{{ item.content }}"
+      owner: root
+      group: root
+    loop:
+    - name: osac-bmf-nft.service
+      content: |
+        [Unit]
+        Description=OSAC BMF forwarding and NAT rules
+        Wants=network-online.target
+        After=network-online.target nftables.service
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/local/sbin/osac-bmf-nft
+    # ponytail: timer re-probes which hub node serves metal3 :6180, so the DNAT follows the pod
+    - name: osac-bmf-nft.timer
+      content: |
+        [Unit]
+        Description=Re-apply OSAC BMF nftables rules
+
+        [Timer]
+        OnBootSec=1min
+        OnUnitActiveSec=2min
+
+        [Install]
+        WantedBy=timers.target
+    loop_control:
+      label: "{{ item.name }}"
+
+  - name: Install libvirt network hook to re-apply rules when libvirt rebuilds its table
+    ansible.builtin.copy:
+      dest: /etc/libvirt/hooks/network
+      mode: u=rwx,go=rx
+      owner: root
+      group: root
+      content: |
+        #!/bin/sh
+        # Managed by Ansible (ocp4_workload_osac)
+        [ "$1" = default ] && [ "$2" = started ] && systemctl start --no-block osac-bmf-nft.service
+        exit 0
+    register: _bmf_libvirt_hook
+
+  - name: Restart virtnetworkd so it picks up the network hook
+    when: _bmf_libvirt_hook is changed
+    ansible.builtin.systemd:
+      name: virtnetworkd.service
+      state: restarted
+
+  - name: Apply OSAC BMF nftables rules
+    ansible.builtin.systemd:
+      name: osac-bmf-nft.service
+      state: restarted
+      daemon_reload: true
+
+  - name: Enable OSAC BMF nftables timer
+    ansible.builtin.systemd:
+      name: osac-bmf-nft.timer
+      state: started
+      enabled: true
+
+  # The on-disk nftables config is an empty template: a reload would wipe the lab ruleset
+  - name: Read live nftables ruleset (without libvirt/firewalld tables)
+    ansible.builtin.shell: >-
+      set -o pipefail;
+      nft list tables | grep -Ev 'libvirt|firewalld' |
+      while read -r _ family name; do nft list table "$family" "$name"; done
+    register: _nft_live
     changed_when: false
 
-  - name: Add forward rule virbr0 -> enp2s0 (Ironic hub)
-    ansible.builtin.command: >-
-      nft insert rule inet filter forward iifname virbr0 oifname enp2s0 accept
-    when: '"iifname \"virbr0\" oifname \"enp2s0\" accept" not in _nft_ruleset.stdout'
-    changed_when: true
+  - name: Persist nftables ruleset to /etc/sysconfig/nftables.conf
+    ansible.builtin.copy:
+      dest: /etc/sysconfig/nftables.conf
+      mode: u=rw,go=
+      owner: root
+      group: root
+      content: "{{ _nft_live.stdout }}\n"
 
-  - name: Add return forward rule enp2s0 -> virbr0 (Ironic hub)
-    ansible.builtin.command: >-
-      nft insert rule inet filter forward iifname enp2s0 oifname virbr0
-      ct state established,related accept
-    when: >-
-      'iifname "enp2s0" oifname "virbr0" ct state established,related accept'
-      not in _nft_ruleset.stdout
-    changed_when: true
-
-  - name: Add NAT masquerade for libvirt network -> enp2s0
-    ansible.builtin.command: >-
-      nft add rule inet nat postrouting
-      ip saddr 192.168.122.0/24 oifname enp2s0 masquerade
-    when: '"ip saddr 192.168.122.0/24 oifname \"enp2s0\" masquerade" not in _nft_ruleset.stdout'
-    changed_when: true
-
-  - name: Add forward rule virbr0 -> enp1s0 (internet)
-    ansible.builtin.command: >-
-      nft add rule inet filter forward iifname virbr0 oifname enp1s0 accept
-    when: '"iifname \"virbr0\" oifname \"enp1s0\" accept" not in _nft_ruleset.stdout'
-    changed_when: true
-
-  - name: Add return forward rule enp1s0 -> virbr0 (internet)
-    ansible.builtin.command: >-
-      nft add rule inet filter forward iifname enp1s0 oifname virbr0
-      ct state established,related accept
-    when: >-
-      'iifname "enp1s0" oifname "virbr0" ct state established,related accept'
-      not in _nft_ruleset.stdout
-    changed_when: true
-
-  - name: Create nat prerouting chain if absent
-    ansible.builtin.command: >-
-      nft add chain inet nat prerouting
-      '{ type nat hook prerouting priority dstnat; }'
-    when: '"prerouting" not in _nft_ruleset.stdout'
-    changed_when: true
-
-  - name: Add DNAT rule for Ironic VIP :6180 -> 10.10.10.11
-    ansible.builtin.command: >-
-      nft add rule inet nat prerouting
-      ip daddr 10.10.10.100 tcp dport 6180 dnat to 10.10.10.11
-    when: '"ip daddr 10.10.10.100 tcp dport 6180 dnat to 10.10.10.11" not in _nft_ruleset.stdout'
-    changed_when: true
+  - name: Enable nftables service to load the persisted ruleset at boot
+    ansible.builtin.systemd:
+      name: nftables.service
+      enabled: true

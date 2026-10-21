@@ -1,0 +1,144 @@
+---
+# --------------------------------------------------------------
+# Metal3 must watch the osac namespace for the virtual BMHs
+# --------------------------------------------------------------
+- name: Enable watchAllNamespaces on Metal3 provisioning
+  kubernetes.core.k8s:
+    state: patched
+    api_version: metal3.io/v1alpha1
+    kind: Provisioning
+    name: provisioning-configuration
+    definition:
+      spec:
+        watchAllNamespaces: true
+
+- name: Wait for metal3-baremetal-operator rollout
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: metal3-baremetal-operator
+    namespace: openshift-machine-api
+    wait: true
+    wait_condition:
+      type: Available
+      status: "True"
+    wait_timeout: 300
+
+# BMH create/label fails with "no endpoints available" until the webhook has an endpoint
+- name: Wait for baremetal-operator webhook endpoint
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Endpoints
+    name: baremetal-operator-webhook-service
+    namespace: openshift-machine-api
+  register: r_bmo_webhook_ep
+  until: >-
+    r_bmo_webhook_ep.resources | length > 0 and
+    r_bmo_webhook_ep.resources[0].subsets | default([]) | map(attribute='addresses', default=[]) | flatten | length > 0
+  retries: 30
+  delay: 10
+
+# ------------------------------------------------------------------
+# Hosted cluster settings for RHDP (no DNS provider, single replica)
+# ------------------------------------------------------------------
+- name: Read cluster base domain
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: DNS
+    name: cluster
+  register: r_cluster_dns
+
+- name: Configure cluster-fulfillment-ig for RHDP
+  vars:
+    _hosted_domain: "hosted.{{ r_cluster_dns.resources[0].spec.baseDomain }}"
+  kubernetes.core.k8s:
+    state: patched
+    api_version: v1
+    kind: ConfigMap
+    name: cluster-fulfillment-ig
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    definition:
+      data:
+        DNS_CLASS: dns.noop.dns
+        EXTERNAL_ACCESS_BASE_DOMAIN: "{{ _hosted_domain }}"
+        HOSTED_CLUSTER_BASE_DOMAIN: "{{ _hosted_domain }}"
+        HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY: SingleReplica
+        HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY: SingleReplica
+        NETWORK_STEPS_COLLECTION: ci.steps
+
+# --------------------------------------------------------------------
+# NetworkClass k8s-only is missing fabric_manager (chart default bug).
+# Must be set before tenants/VirtualNetworks are created.
+# --------------------------------------------------------------------
+- name: Find OSAC postgres pod
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: osac-infra
+    field_selectors:
+    - status.phase=Running
+  register: r_osac_pg_pods
+
+- name: Set fabric_manager cudn_net on NetworkClass k8s-only
+  kubernetes.core.k8s_exec:
+    namespace: osac-infra
+    pod: "{{ (r_osac_pg_pods.resources | map(attribute='metadata.name') | select('match', '^postgres-') | first) }}"
+    container: server
+    command: >-
+      psql -U postgres osac_service -tAc
+      "UPDATE network_classes SET data = data || '{\"fabric_manager\": \"cudn_net\"}'::jsonb
+      WHERE name = 'k8s-only' RETURNING name"
+  register: r_networkclass_patch
+  until: "'k8s-only' in r_networkclass_patch.stdout | default('')"
+  retries: 30
+  delay: 10
+
+# ---------------------------------------------------------------------
+# Control-plane nodes route the libvirt guest network via the BMF host.
+# Covers all masters since the metal3 pod can move.
+# ---------------------------------------------------------------------
+- name: Route libvirt guest network via BMF host on control-plane nodes
+  kubernetes.core.k8s:
+    state: present
+    definition:
+      apiVersion: nmstate.io/v1
+      kind: NodeNetworkConfigurationPolicy
+      metadata:
+        name: osac-bmf-guest-route
+      spec:
+        nodeSelector:
+          node-role.kubernetes.io/master: ""
+        desiredState:
+          routes:
+            config:
+            - destination: 192.168.122.0/24
+              next-hop-address: 10.10.10.2
+              next-hop-interface: br-ex
+
+- name: Wait for guest route policy to be applied
+  kubernetes.core.k8s_info:
+    api_version: nmstate.io/v1
+    kind: NodeNetworkConfigurationPolicy
+    name: osac-bmf-guest-route
+    wait: true
+    wait_condition:
+      type: Available
+      status: "True"
+    wait_timeout: 600
+
+- name: Restart OSAC controllers periodically (token expiry workaround)
+  kubernetes.core.k8s:
+    state: present
+    template: token-restart-cronjob.yaml.j2
+
+# --------------------------------------------------------------
+# CaaS workaround helper for Exercise 5 on the bastion
+# --------------------------------------------------------------
+- name: Copy caas-wa.sh to bastion
+  delegate_to: "{{ _bastion_host }}"
+  ansible.builtin.copy:
+    src: caas-wa.sh
+    dest: "~{{ ansible_user }}/rhdp-caas/"
+    mode: u=rwx,go=rx
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"

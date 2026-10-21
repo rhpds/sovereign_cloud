@@ -1,0 +1,59 @@
+# ponytail: stopgap for fulfillment access token expiry (~2h pod age); remove once fixed upstream
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: osac-token-restart
+  namespace: {{ ocp4_workload_osac_namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: osac-token-restart
+  namespace: {{ ocp4_workload_osac_namespace }}
+rules:
+- apiGroups: [apps]
+  resources: [deployments]
+  verbs: [get, list, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: osac-token-restart
+  namespace: {{ ocp4_workload_osac_namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: osac-token-restart
+subjects:
+- kind: ServiceAccount
+  name: osac-token-restart
+  namespace: {{ ocp4_workload_osac_namespace }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: osac-token-restart
+  namespace: {{ ocp4_workload_osac_namespace }}
+spec:
+  # hourly: cron cannot express 90 minutes, and tokens expire at ~2h
+  schedule: "0 * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          serviceAccountName: osac-token-restart
+          restartPolicy: Never
+          containers:
+          - name: restart
+            image: registry.redhat.io/openshift4/ose-cli-rhel9:latest
+            command:
+            - oc
+            - rollout
+            - restart
+            - deployment/osac-operator
+            - deployment/fulfillment-controller
+            - deployment/fulfillment-grpc-server
+            - -n
+            - {{ ocp4_workload_osac_namespace }}
