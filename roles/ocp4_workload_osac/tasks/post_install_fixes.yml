@@ -120,6 +120,21 @@
   delay: 10
   until: r_osac_ui_client is succeeded
 
+# Default 30 min idle timeout invalidates tenant CLI refresh tokens during long lab waits
+- name: Raise osac realm SSO session limits to 24h
+  community.general.keycloak_realm:
+    auth_keycloak_url: "{{ _ocp4_workload_osac_kc_url }}"
+    auth_realm: master
+    auth_client_id: admin-cli
+    auth_username: "{{ _ocp4_workload_osac_kc_admin_user }}"
+    auth_password: "{{ _ocp4_workload_osac_kc_admin_password }}"
+    validate_certs: false
+    id: osac
+    realm: osac
+    state: present
+    sso_session_idle_timeout: 86400
+    sso_session_max_lifespan: 86400
+
 # trust-manager Bundle needs: OSAC internal CA + OCP ingress CA + system CAs.
 # The ingress CA signs the Keycloak route cert; fulfillment services need to trust
 # it when validating OIDC tokens over the external Keycloak URL.
