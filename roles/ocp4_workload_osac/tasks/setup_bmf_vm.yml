@@ -166,12 +166,28 @@
       content: |
         #!/bin/sh
         # Managed by Ansible (ocp4_workload_osac)
-        [ "$1" = default ] && [ "$2" = started ] && systemctl start --no-block osac-bmf-nft.service
+        # Called for every network event; must exit 0 or libvirt blocks VM port creation
+        if [ "$1" = default ] && [ "$2" = started ] && [ "$3" = begin ]; then
+          systemctl start --no-block osac-bmf-nft.service || true
+        fi
         exit 0
     register: _bmf_libvirt_hook
 
+  # Files created via Ansible's temp dir keep the wrong SELinux label; libvirt then gets exit 126
+  - name: Restore SELinux labels on libvirt hooks
+    ansible.builtin.command: restorecon -Rv /etc/libvirt/hooks
+    register: _bmf_hook_restorecon
+    changed_when: _bmf_hook_restorecon.stdout | length > 0
+
+  - name: Self-test libvirt network hook exits 0 for handled and unhandled events
+    ansible.builtin.command: "/etc/libvirt/hooks/network default {{ item }} begin -"
+    loop:
+    - port-created
+    - started
+    changed_when: false
+
   - name: Restart virtnetworkd so it picks up the network hook
-    when: _bmf_libvirt_hook is changed
+    when: _bmf_libvirt_hook is changed or _bmf_hook_restorecon is changed
     ansible.builtin.systemd:
       name: virtnetworkd.service
       state: restarted
