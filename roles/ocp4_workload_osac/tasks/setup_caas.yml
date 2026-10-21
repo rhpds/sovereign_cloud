@@ -141,4 +141,3 @@
     dest: "~{{ ansible_user }}/rhdp-caas/"
     mode: u=rwx,go=rx
     owner: "{{ ansible_user }}"
-    group: "{{ ansible_user }}"
