@@ -151,6 +151,12 @@
     loop_control:
       label: "{{ item.name }}"
 
+  - name: Create libvirt hooks directory
+    ansible.builtin.file:
+      path: /etc/libvirt/hooks
+      state: directory
+      mode: u=rwx,go=rx
+
   - name: Install libvirt network hook to re-apply rules when libvirt rebuilds its table
     ansible.builtin.copy:
       dest: /etc/libvirt/hooks/network
