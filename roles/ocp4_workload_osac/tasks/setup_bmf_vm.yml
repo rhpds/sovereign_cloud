@@ -192,11 +192,11 @@
       state: restarted
       daemon_reload: true
 
-  - name: Verify libvirt guest_input allows Ironic :9999
+  - name: Verify libvirt guest_input allows hub -> guest :443 and Ironic :9999
     ansible.builtin.command: nft list chain ip libvirt_network guest_input
     register: _bmf_guest_input
     changed_when: false
-    failed_when: "'tcp dport 9999' not in _bmf_guest_input.stdout"
+    failed_when: "'tcp dport { 80, 443, 9999 }' not in _bmf_guest_input.stdout"
 
   - name: Enable OSAC BMF nftables service and timer at boot
     ansible.builtin.systemd:

@@ -37,7 +37,7 @@ delete_owned() {
   cat <<'EOF'
 insert rule inet filter forward iifname "virbr0" oifname "enp2s0" accept comment "osac"
 insert rule inet filter forward iifname "enp2s0" oifname "virbr0" ct state established,related accept comment "osac"
-insert rule inet filter forward iifname "enp2s0" oifname "virbr0" ip daddr 192.168.122.0/24 tcp dport 9999 ct state new accept comment "osac"
+insert rule inet filter forward iifname "enp2s0" oifname "virbr0" ip daddr 192.168.122.0/24 tcp dport { 80, 443, 9999 } ct state new accept comment "osac"
 insert rule inet filter forward iifname "enp2s0" oifname "virbr0" icmp type echo-request accept comment "osac"
 insert rule inet filter forward iifname "virbr0" oifname "enp1s0" accept comment "osac"
 insert rule inet filter forward iifname "enp1s0" oifname "virbr0" ct state established,related accept comment "osac"
@@ -58,7 +58,7 @@ EOF
     # Stateless masquerade rewrites guest replies to Ironic's inbound :9999; keep only "ct state new"
     nft -a list chain ip libvirt_network guest_nat |
       awk '/masquerade/ && !/ct state new/ {print "delete rule ip libvirt_network guest_nat handle " $NF}'
-    echo 'insert rule ip libvirt_network guest_input oif "virbr0" ip daddr 192.168.122.0/24 tcp dport 9999 accept comment "osac"'
+    echo 'insert rule ip libvirt_network guest_input oif "virbr0" ip daddr 192.168.122.0/24 tcp dport { 80, 443, 9999 } accept comment "osac"'
     if ! nft list chain ip libvirt_network guest_nat | grep -q 'ct state new'; then
       cat <<'EOF'
 add rule ip libvirt_network guest_nat meta l4proto tcp ip saddr 192.168.122.0/24 ip daddr != 192.168.122.0/24 ct state new masquerade to :1024-65535
