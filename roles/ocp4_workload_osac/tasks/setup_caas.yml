@@ -126,7 +126,83 @@
       status: "True"
     wait_timeout: 1800
 
-# br-ex flaps while the route is applied; controllers that lost Keycloak meanwhile stay broken
+# br-ex flaps while the route is applied; after a flap keepalived can leave no node holding
+# the ingress VIP, which breaks every in-cluster *.apps call (e.g. Keycloak discovery)
+- name: Read cluster infrastructure for the ingress VIP
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: Infrastructure
+    name: cluster
+  register: r_infrastructure
+
+- name: Ensure a node holds the ingress VIP
+  when: r_infrastructure.resources[0].status.platformStatus.type == 'BareMetal'
+  vars:
+    _ingress_vip: "{{ r_infrastructure.resources[0].status.platformStatus.baremetal.ingressIPs[0] }}"
+  block:
+  - name: Find worker nodes
+    kubernetes.core.k8s_info:
+      api_version: v1
+      kind: Node
+      label_selectors:
+      - node-role.kubernetes.io/worker
+    register: r_worker_nodes
+
+  - name: Find keepalived pods
+    kubernetes.core.k8s_info:
+      api_version: v1
+      kind: Pod
+      namespace: openshift-kni-infra
+    register: r_kni_pods
+
+  # Only workers run routers, so only they can hold the ingress VIP
+  - name: Set worker keepalived pods
+    ansible.builtin.set_fact:
+      _keepalived_pods: >-
+        {{ r_kni_pods.resources | selectattr('metadata.name', 'match', '^keepalived-')
+           | selectattr('spec.nodeName', 'in', r_worker_nodes.resources | map(attribute='metadata.name') | list)
+           | map(attribute='metadata.name') | list }}
+
+  - name: Check ingress VIP holder
+    ansible.builtin.include_tasks: check_ingress_vip.yml
+
+  - name: Give keepalived time to elect a VIP holder
+    when: _ingress_vip_holders | length == 0
+    block:
+    - name: Wait for keepalived to settle
+      ansible.builtin.pause:
+        seconds: 120
+
+    - name: Re-check ingress VIP holder
+      ansible.builtin.include_tasks: check_ingress_vip.yml
+
+  # SIGTERM to PID 1 stops keepalived; kubelet restarts the container with a clean VRRP state
+  - name: Restart worker keepalived containers
+    when: _ingress_vip_holders | length == 0
+    kubernetes.core.k8s_exec:
+      namespace: openshift-kni-infra
+      pod: "{{ item }}"
+      container: keepalived
+      command: kill 1
+    loop: "{{ _keepalived_pods }}"
+    failed_when: false
+
+  - name: Wait for a worker to take the ingress VIP after the restart
+    when: _ingress_vip_holders | length == 0
+    block:
+    - name: Wait for keepalived to come back
+      ansible.builtin.pause:
+        seconds: 60
+
+    - name: Check ingress VIP holder after restart
+      ansible.builtin.include_tasks: check_ingress_vip.yml
+
+    - name: Fail if no node holds the ingress VIP
+      when: _ingress_vip_holders | length == 0
+      ansible.builtin.fail:
+        msg: "No worker holds ingress VIP {{ _ingress_vip }} after restarting keepalived."
+
+# Controllers that lost Keycloak during the flap stay broken until restarted
 - name: Restart OSAC controllers after the route rollout
   kubernetes.core.k8s:
     state: patched

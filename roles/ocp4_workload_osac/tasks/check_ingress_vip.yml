@@ -1,0 +1,17 @@
+---
+# Sets _ingress_vip_holders: keepalived pods whose node currently holds the ingress VIP on br-ex
+- name: Read br-ex addresses from keepalived pods
+  kubernetes.core.k8s_exec:
+    namespace: openshift-kni-infra
+    pod: "{{ item }}"
+    container: keepalived
+    command: ip -o addr show br-ex
+  loop: "{{ _keepalived_pods }}"
+  register: r_keepalived_addrs
+  failed_when: false
+
+- name: Count nodes holding the ingress VIP
+  ansible.builtin.set_fact:
+    _ingress_vip_holders: >-
+      {{ r_keepalived_addrs.results | selectattr('stdout', 'defined')
+         | selectattr('stdout', 'search', ' ' ~ (_ingress_vip | regex_escape) ~ '/') | map(attribute='item') | list }}
