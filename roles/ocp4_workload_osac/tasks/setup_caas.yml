@@ -139,3 +139,25 @@
     dest: "~{{ ansible_user }}/rhdp-caas/"
     mode: u=rwx,go=rx
     owner: "{{ ansible_user }}"
+
+- name: Add CaaS lab shell helpers to bastion .bashrc
+  delegate_to: "{{ _bastion_host }}"
+  ansible.builtin.blockinfile:
+    path: "~{{ ansible_user }}/.bashrc"
+    marker: "# {mark} OSAC CaaS lab helpers"
+    block: |
+      guest_ssh() {
+        local ip=${GUEST_IP:-$(oc get bmh virtual-bmh-1 -n osac -o jsonpath='{.status.hardware.nics[0].ip}')}
+        ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes \
+          -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+          -o 'ProxyCommand=sudo ssh -W %h:%p root@10.10.10.2' "core@${ip}" "$@"
+      }
+
+      guest_oc() {
+        local order vip
+        order=${ORDER:-$(oc get clusterorder -n osac --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1:].metadata.name}')}
+        vip=$(oc get svc kube-apiserver -n "osac-${order}-${order}" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        [ -s "/tmp/${order}/kubeconfig" ] || \
+          oc extract "secret/${order}-admin-kubeconfig" -n "osac-${order}" --to="/tmp/${order}" --confirm >/dev/null
+        oc --kubeconfig="/tmp/${order}/kubeconfig" --server="https://${vip}:6443" --insecure-skip-tls-verify "$@"
+      }
