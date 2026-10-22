@@ -462,6 +462,23 @@ EOF
     oc patch hostedcluster "$order" -n "$hcp_ns" --type merge -p "$(jq -nc --arg h "$console_host" \
       '{spec: {configuration: {ingress: {componentRoutes: [{name: "console", namespace: "openshift-console",
         hostname: $h, servingCertKeyPairSecret: {name: "console-custom-tls"}}]}}}}')"
+    # Trust the hosted OAuth route too: the hub wildcard covers it. "names" is required by HyperShift's CEL rule.
+    oauth_host=$(oc get route oauth -n "$hcp_ns-$order" -o jsonpath='{.spec.host}')
+    [[ "$oauth_host" =~ ^[a-z0-9.-]+$ ]] || die 'Hosted OAuth route not found.'
+    oauth_patch=$(oc patch hostedcluster "$order" -n "$hcp_ns" --type merge -p "$(jq -nc --arg h "$oauth_host" \
+      '{spec: {configuration: {apiServer: {servingCerts: {namedCertificates: [{names: [$h],
+        servingCertificate: {name: "console-custom-tls"}}]}}}}}')")
+    echo "$oauth_patch"
+    if [[ "$oauth_patch" != *"(no change)"* ]]; then
+      # The patch rolls kube-apiserver and oauth-openshift; OAuth returns 400/500 for ~2 min after healthz is up
+      log "Waiting for OAuth on $oauth_host to serve the trusted certificate..."
+      for _ in {1..60}; do
+        curl -fsS -m 5 -o /dev/null "https://$oauth_host/healthz" 2>/dev/null && break
+        sleep 10
+      done
+      curl -fsS -m 5 -o /dev/null "https://$oauth_host/healthz" || die "OAuth on $oauth_host not healthy with a trusted certificate."
+      sleep 90
+    fi
     log "Waiting for the hosted console operator to serve $console_host..."
     for _ in {1..60}; do
       route_host=$(guest_oc get route console-custom -n openshift-console -o jsonpath='{.spec.host}' 2>/dev/null || true)
@@ -469,6 +486,7 @@ EOF
       if [[ "$route_host" == "$console_host" && "$available" == True ]]; then
         echo "API:     https://api-$order.$apps"
         echo "Console: https://$console_host"
+        echo "OAuth:   https://$oauth_host"
         exit 0
       fi
       sleep 10
