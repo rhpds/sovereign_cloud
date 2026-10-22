@@ -32,6 +32,35 @@
       state: started
       enabled: true
 
+  # Open mode: libvirt adds no firewall rules for the network, so it can't block hub -> guest
+  # traffic or rewrite replies. Forwarding and NAT are managed by osac-bmf-nft instead.
+  - name: Write libvirt default network definition (forward mode open)
+    ansible.builtin.copy:
+      dest: /etc/libvirt/osac-default-net.xml
+      mode: ug=rw,go=r
+      owner: root
+      group: root
+      content: |
+        <network>
+          <name>default</name>
+          <forward mode='open'/>
+          <bridge name='virbr0' stp='on' delay='0'/>
+          <ip address='192.168.122.1' netmask='255.255.255.0'>
+            <dhcp>
+              <range start='192.168.122.2' end='192.168.122.254'/>
+            </dhcp>
+          </ip>
+        </network>
+    register: _bmf_default_net
+
+  # Runs before any VM exists, so destroying the network disconnects nothing
+  - name: Redefine libvirt default network
+    when: _bmf_default_net is changed
+    ansible.builtin.shell: >-
+      virsh net-destroy default || true;
+      virsh net-define /etc/libvirt/osac-default-net.xml
+    changed_when: true
+
   - name: Start default libvirt network (creates virbr0)
     ansible.builtin.command: virsh net-start default
     register: _virsh_net_start
@@ -103,6 +132,8 @@
         net.ipv4.conf.default.rp_filter = 0
         net.ipv4.conf.enp2s0.rp_filter = 0
         net.ipv4.conf.virbr0.rp_filter = 0
+        # libvirt does not enable forwarding for open-mode networks
+        net.ipv4.ip_forward = 1
     register: _bmf_sysctl
 
   - name: Apply rp_filter settings
@@ -131,7 +162,7 @@
         [Unit]
         Description=OSAC BMF forwarding and NAT rules
         Wants=network-online.target
-        After=network-online.target nftables.service virtnetworkd.service
+        After=network-online.target nftables.service
 
         [Service]
         Type=oneshot
@@ -154,49 +185,17 @@
     loop_control:
       label: "{{ item.name }}"
 
-  # A libvirt network hook can't be used: SELinux denies virtnetworkd_t executing virt_hook_t,
-  # and a failing hook breaks every VM attach. Remove any hook left by earlier role versions.
-  - name: Remove libvirt network hook
-    ansible.builtin.file:
-      path: /etc/libvirt/hooks/network
-      state: absent
-    register: _bmf_libvirt_hook
-
-  # virtnetworkd rebuilds table ip libvirt_network on start; the timer covers net-destroy/net-start
-  - name: Create virtnetworkd drop-in directory
-    ansible.builtin.file:
-      path: /etc/systemd/system/virtnetworkd.service.d
-      state: directory
-      mode: u=rwx,go=rx
-
-  - name: Re-apply OSAC BMF nftables rules whenever virtnetworkd starts
-    ansible.builtin.copy:
-      dest: /etc/systemd/system/virtnetworkd.service.d/osac-nft.conf
-      mode: ug=rw,go=r
-      owner: root
-      group: root
-      content: |
-        [Service]
-        ExecStartPost=-/usr/bin/systemctl start --no-block osac-bmf-nft.service
-    register: _bmf_virtnetworkd_dropin
-
-  - name: Restart virtnetworkd to drop the hook and load the drop-in
-    when: _bmf_libvirt_hook is changed or _bmf_virtnetworkd_dropin is changed
-    ansible.builtin.systemd:
-      name: virtnetworkd.service
-      state: restarted
-      daemon_reload: true
   - name: Apply OSAC BMF nftables rules
     ansible.builtin.systemd:
       name: osac-bmf-nft.service
       state: restarted
       daemon_reload: true
 
-  - name: Verify libvirt guest_input allows hub -> guest :443 and Ironic :9999
-    ansible.builtin.command: nft list chain ip libvirt_network guest_input
-    register: _bmf_guest_input
+  - name: Verify hub -> guest :80/:443/:9999 forwarding is allowed
+    ansible.builtin.command: nft list chain inet filter forward
+    register: _bmf_forward
     changed_when: false
-    failed_when: "'tcp dport { 80, 443, 9999 }' not in _bmf_guest_input.stdout"
+    failed_when: "'tcp dport { 80, 443, 9999 }' not in _bmf_forward.stdout"
 
   - name: Enable OSAC BMF nftables service and timer at boot
     ansible.builtin.systemd:
@@ -232,26 +231,3 @@
     ansible.builtin.systemd:
       name: nftables.service
       enabled: true
-
-  # nftables.service flushes the whole ruleset on reload/restart, including libvirt's table.
-  # Restarting virtnetworkd rebuilds that table, and its drop-in re-runs osac-bmf-nft.
-  - name: Create nftables drop-in directory
-    ansible.builtin.file:
-      path: /etc/systemd/system/nftables.service.d
-      state: directory
-      mode: u=rwx,go=rx
-
-  - name: Rebuild libvirt and OSAC rules after nftables reload/restart
-    ansible.builtin.copy:
-      dest: /etc/systemd/system/nftables.service.d/osac-nft.conf
-      mode: ug=rw,go=r
-      owner: root
-      group: root
-      content: |
-        [Service]
-        ExecStartPost=-/usr/bin/systemctl try-restart --no-block virtnetworkd.service
-        ExecReload=-/usr/bin/systemctl try-restart --no-block virtnetworkd.service
-
-  - name: Reload systemd for the nftables drop-in
-    ansible.builtin.systemd:
-      daemon_reload: true

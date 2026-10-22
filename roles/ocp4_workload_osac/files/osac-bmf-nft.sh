@@ -2,7 +2,8 @@
 # Managed by Ansible (ocp4_workload_osac).
 # Re-applies the OSAC BMF forwarding/NAT rules in one atomic nft batch.
 # Rules owned here carry comment "osac" and are replaced on every run.
-# Run by osac-bmf-nft.service (boot + timer) and the libvirt network hook.
+# Run by osac-bmf-nft.service (boot + timer). The libvirt network uses forward mode open,
+# so libvirt adds no rules of its own.
 set -euo pipefail
 
 # Hub control-plane IPs; metal3-httpd (:6180) runs on whichever node hosts the metal3 pod
@@ -52,21 +53,6 @@ EOF
     fi
   done
 
-  # libvirt rebuilds this table whenever the network or virtnetworkd restarts
-  if nft list table ip libvirt_network >/dev/null 2>&1; then
-    delete_owned ip libvirt_network guest_input
-    # Stateless masquerade rewrites guest replies to Ironic's inbound :9999; keep only "ct state new"
-    nft -a list chain ip libvirt_network guest_nat |
-      awk '/masquerade/ && !/ct state new/ {print "delete rule ip libvirt_network guest_nat handle " $NF}'
-    echo 'insert rule ip libvirt_network guest_input oif "virbr0" ip daddr 192.168.122.0/24 tcp dport { 80, 443, 9999 } accept comment "osac"'
-    if ! nft list chain ip libvirt_network guest_nat | grep -q 'ct state new'; then
-      cat <<'EOF'
-add rule ip libvirt_network guest_nat meta l4proto tcp ip saddr 192.168.122.0/24 ip daddr != 192.168.122.0/24 ct state new masquerade to :1024-65535
-add rule ip libvirt_network guest_nat meta l4proto udp ip saddr 192.168.122.0/24 ip daddr != 192.168.122.0/24 ct state new masquerade to :1024-65535
-add rule ip libvirt_network guest_nat ip saddr 192.168.122.0/24 ip daddr != 192.168.122.0/24 ct state new masquerade
-EOF
-    fi
-  fi
 } > "$batch"
 
 nft -f "$batch" || { echo "nft batch failed:" >&2; cat "$batch" >&2; exit 1; }
