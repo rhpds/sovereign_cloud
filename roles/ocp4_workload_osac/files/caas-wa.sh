@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Run on the RHDP bastion as lab-user. Does not create or delete a CaaS order.
 usage() {
-  echo "Usage: $0 auto|status|agent-dns|finish|refresh-dns [order-xxxxx]" >&2
+  echo "Usage: $0 auto|status|agent-dns|finish|refresh-dns|access [order-xxxxx]" >&2
   exit 2
 }
 die() { echo "Error: $*" >&2; exit 1; }
@@ -11,7 +11,7 @@ log() { printf '[%(%H:%M:%S)T] %s\n' -1 "$*"; }
 
 [[ $# -ge 1 && $# -le 2 ]] || usage
 action=$1
-[[ "$action" == auto || "$action" == status || "$action" == agent-dns || "$action" == finish || "$action" == refresh-dns ]] || usage
+[[ "$action" == auto || "$action" == status || "$action" == agent-dns || "$action" == finish || "$action" == refresh-dns || "$action" == access ]] || usage
 command -v oc >/dev/null
 command -v jq >/dev/null
 explicit_order=${2:-}
@@ -392,5 +392,87 @@ REMOTE
     echo 'Restarting guest DNS and console operator pods after confirmed DNS server misbehaving error.'
     guest_oc delete pod -n openshift-dns -l dns.operator.openshift.io/daemonset-dns=default
     guest_oc delete pod -n openshift-console-operator --all
+    ;;
+  access)
+    # Solve path for Exercise 6: publish the hosted API and console through the hub router.
+    need_vip
+    [[ "$guest_ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || die 'Worker guest IP is not available yet.'
+    ensure_kubeconfig || die 'Guest kubeconfig secret is not ready.'
+    hcp_ns="osac-$order"
+    apps=$(oc get ingresses.config/cluster -o jsonpath='{.spec.domain}')
+    [[ "$apps" =~ ^[a-z0-9.-]+$ ]] || die 'Hub apps domain is missing or invalid.'
+    console_host="console-$order.$apps"
+    oc create namespace osac-hosted-access --dry-run=client -o yaml | oc apply -f - >/dev/null
+    for svc in "api 6443 $vip api-$order.$apps" "console 443 $guest_ip $console_host"; do
+      read -r kind port ip host <<< "$svc"
+      oc apply -n osac-hosted-access -f - <<EOF
+apiVersion: v1
+kind: Service
+metadata:
+  name: $kind-$order
+spec:
+  ports:
+  - name: https
+    port: $port
+    targetPort: $port
+    protocol: TCP
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: $kind-$order
+  labels:
+    kubernetes.io/service-name: $kind-$order
+    endpointslice.kubernetes.io/managed-by: osac-lab
+addressType: IPv4
+ports:
+- name: https
+  port: $port
+  protocol: TCP
+endpoints:
+- addresses:
+  - $ip
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: $kind-$order
+spec:
+  host: $host
+  to:
+    kind: Service
+    name: $kind-$order
+  port:
+    targetPort: https
+  tls:
+    termination: passthrough
+EOF
+    done
+    # Reuse the hub's trusted *.apps wildcard; per-host DNS-01 certs leave stale _acme-challenge records here
+    hub_cert=$(oc get ingresscontroller default -n openshift-ingress-operator -o jsonpath='{.spec.defaultCertificate.name}')
+    [[ -n "$hub_cert" ]] || die 'Hub ingress controller has no default certificate.'
+    tls_json=$(oc get secret "$hub_cert" -n openshift-ingress -o json)
+    tls_secret() {
+      jq --arg ns "$1" '{apiVersion: "v1", kind: "Secret", type: "kubernetes.io/tls",
+        metadata: {name: "console-custom-tls", namespace: $ns},
+        data: {"tls.crt": .data["tls.crt"], "tls.key": .data["tls.key"]}}' <<< "$tls_json"
+    }
+    tls_secret "$hcp_ns" | oc apply -f -
+    tls_secret openshift-config | guest_oc apply -f -
+    oc patch hostedcluster "$order" -n "$hcp_ns" --type merge -p "$(jq -nc --arg h "$console_host" \
+      '{spec: {configuration: {ingress: {componentRoutes: [{name: "console", namespace: "openshift-console",
+        hostname: $h, servingCertKeyPairSecret: {name: "console-custom-tls"}}]}}}}')"
+    log "Waiting for the hosted console operator to serve $console_host..."
+    for _ in {1..60}; do
+      route_host=$(guest_oc get route console-custom -n openshift-console -o jsonpath='{.spec.host}' 2>/dev/null || true)
+      available=$(guest_oc get co console -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null || true)
+      if [[ "$route_host" == "$console_host" && "$available" == True ]]; then
+        echo "API:     https://api-$order.$apps"
+        echo "Console: https://$console_host"
+        exit 0
+      fi
+      sleep 10
+    done
+    die "Console not Available on $console_host after 10 minutes (route=${route_host:-none}, Available=${available:-unknown})."
     ;;
 esac
