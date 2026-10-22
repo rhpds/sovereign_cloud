@@ -106,6 +106,8 @@
       metadata:
         name: osac-bmf-guest-route
       spec:
+        # nmstate reactivates br-ex; one node at a time so keepalived VIPs can fail over
+        maxUnavailable: 1
         desiredState:
           routes:
             config:
@@ -122,7 +124,26 @@
     wait_condition:
       type: Available
       status: "True"
-    wait_timeout: 600
+    wait_timeout: 1800
+
+# br-ex flaps while the route is applied; controllers that lost Keycloak meanwhile stay broken
+- name: Restart OSAC controllers after the route rollout
+  kubernetes.core.k8s:
+    state: patched
+    api_version: apps/v1
+    kind: Deployment
+    name: "{{ item }}"
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    definition:
+      spec:
+        template:
+          metadata:
+            annotations:
+              kubectl.kubernetes.io/restartedAt: "{{ now(utc=true).isoformat() }}"
+  loop:
+  - osac-operator
+  - fulfillment-controller
+  - fulfillment-grpc-server
 
 - name: Restart OSAC controllers periodically (token expiry workaround)
   kubernetes.core.k8s:
