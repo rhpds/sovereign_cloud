@@ -53,11 +53,19 @@
         </network>
     register: _bmf_default_net
 
-  # Runs before any VM exists, so destroying the network disconnects nothing
+  # Runs before any VM exists, so destroying the network disconnects nothing.
+  # Undefine first: net-define rejects a same-named network without its UUID.
+  - name: Read libvirt default network definition
+    ansible.builtin.command: virsh net-dumpxml --inactive default
+    register: _bmf_default_net_xml
+    changed_when: false
+    failed_when: false
+
   - name: Redefine libvirt default network
-    when: _bmf_default_net is changed
+    when: _bmf_default_net is changed or "mode='open'" not in _bmf_default_net_xml.stdout
     ansible.builtin.shell: >-
       virsh net-destroy default || true;
+      virsh net-undefine default || true;
       virsh net-define /etc/libvirt/osac-default-net.xml
     changed_when: true
 
