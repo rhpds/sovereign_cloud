@@ -93,6 +93,12 @@
   retries: 30
   delay: 10
 
+# cudn_net never writes the subnet fabric output ConfigMap; subnets are created at lab time
+- name: Create subnet fabric output ConfigMaps for cudn_net subnets
+  kubernetes.core.k8s:
+    state: present
+    template: subnet-fabric-output-cronjob.yaml.j2
+
 # ---------------------------------------------------------------------
 # Hub nodes route the libvirt guest network via the BMF host.
 # All nodes: metal3 (masters) reaches IPA :9999, routers (workers) reach guest :443.

@@ -1,0 +1,91 @@
+# shortcut: osac.templates.cudn_net create_subnet never writes the fabric output ConfigMap the
+# operator reads; this fills it in for every subnet. Remove once fixed upstream.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: osac-subnet-fabric-output
+  namespace: {{ ocp4_workload_osac_namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: osac-subnet-fabric-output
+  namespace: {{ ocp4_workload_osac_namespace }}
+rules:
+- apiGroups: ["*"]
+  resources: [subnets]
+  verbs: [get, list]
+- apiGroups: [""]
+  resources: [configmaps]
+  verbs: [get, create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: osac-subnet-fabric-output
+  namespace: {{ ocp4_workload_osac_namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: osac-subnet-fabric-output
+subjects:
+- kind: ServiceAccount
+  name: osac-subnet-fabric-output
+  namespace: {{ ocp4_workload_osac_namespace }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: osac-subnet-fabric-output
+  namespace: {{ ocp4_workload_osac_namespace }}
+spec:
+  schedule: "* * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      template:
+        spec:
+          serviceAccountName: osac-subnet-fabric-output
+          restartPolicy: Never
+          containers:
+          - name: fabric-output
+            image: registry.redhat.io/openshift4/ose-cli-rhel9:latest
+            command:
+            - /bin/bash
+            - -c
+            - |
+              set -euo pipefail
+              ns={{ ocp4_workload_osac_namespace }}
+              oc get subnet -n "$ns" \
+                -o jsonpath='{range .items[*]}{.metadata.name} {.metadata.uid} {.apiVersion}{"\n"}{end}' |
+              while read -r name uid api; do
+                [ -n "$name" ] || continue
+                cm="subnet-$name-fabric-output"
+                oc get configmap "$cm" -n "$ns" >/dev/null 2>&1 && continue
+                # Owned by the Subnet, so it is garbage-collected when the subnet is deleted
+                oc create -f - <<EOF
+              apiVersion: v1
+              kind: ConfigMap
+              metadata:
+                name: $cm
+                namespace: $ns
+                ownerReferences:
+                - apiVersion: $api
+                  kind: Subnet
+                  name: $name
+                  uid: $uid
+              data:
+                namespace: "$name"
+                cudn_name: "$name"
+                l2_vni: "100"
+                l3_vni: "200"
+                route_target: "65000:100"
+                vrf_name: "$name"
+                fabric_reserved_range: 10.200.0.0/28
+                dhcp_server_ip: ""
+                dhcp_relay_ip: ""
+              EOF
+              done
