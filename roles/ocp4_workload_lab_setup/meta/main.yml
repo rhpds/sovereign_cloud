@@ -1,0 +1,17 @@
+---
+galaxy_info:
+  role_name: ocp4_workload_lab_setup
+  author: Red Hat, Michael Foster (mfoster@redhat.com)
+  description: |
+    Start the sovereign-cloud learner setup script on the bastion.
+    A failure here does not fail provision.
+  license: MIT
+  min_ansible_version: "2.9"
+  platforms:
+  - name: EL
+    versions:
+    - all
+  galaxy_tags:
+  - ocp
+  - openshift
+dependencies: []

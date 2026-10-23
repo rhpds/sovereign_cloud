@@ -1,0 +1,7 @@
+= ocp4_workload_lab_setup - Start the learner setup script
+
+Clones the sovereign-cloud showroom to `~/svc-lab` on the bastion and starts `setup.sh` in the background.
+
+A clone failure, an SSH failure, or a later non-zero exit from `setup.sh` does not fail provision and does not remove the operators the catalog already installed.
+
+See defaults/main.yml for variables to set.

@@ -1,0 +1,62 @@
+---
+# Start setup.sh once, detached from this task. Clone or script failures are
+# logged and ignored so the catalog-installed cluster is still handed out.
+- name: Start learner setup without failing provision
+  when:
+  - bastion_ansible_host | default('') | length > 0
+  - bastion_ansible_user | default('') | length > 0
+  block:
+  - name: Add the bastion for a one-shot SSH
+    ansible.builtin.add_host:
+      name: ocp4-workload-lab-setup-bastion
+      ansible_host: "{{ bastion_ansible_host }}"
+      ansible_user: "{{ bastion_ansible_user }}"
+      ansible_port: "{{ bastion_ansible_port | default(22) | int }}"
+      ansible_password: "{{ bastion_ansible_ssh_pass | default('') }}"
+      ansible_ssh_common_args: >-
+        -o StrictHostKeyChecking=no
+        -o UserKnownHostsFile=/dev/null
+        -o ConnectTimeout=15
+
+  - name: Clone the showroom and start setup.sh in the background
+    delegate_to: ocp4-workload-lab-setup-bastion
+    become: false
+    ansible.builtin.shell: |
+      set +e
+      umask 022
+      log="$HOME/svc-lab-provision.log"
+      dir="$HOME/svc-lab"
+      touch "$log" || exit 0
+      if [ ! -d "$dir/.git" ]; then
+        git clone --depth 1 "{{ ocp4_workload_lab_setup_repo }}" "$dir" >>"$log" 2>&1 || true
+      fi
+      if [ ! -f "$dir/setup.sh" ]; then
+        echo "setup.sh not present; catalog environment left unchanged" >>"$log"
+        exit 0
+      fi
+      pidfile="$HOME/svc-lab-provision.pid"
+      if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+        echo "setup.sh already running; not starting another copy" >>"$log"
+        exit 0
+      fi
+      if command -v setsid >/dev/null 2>&1; then
+        setsid nohup bash "$dir/setup.sh" >>"$log" 2>&1 </dev/null &
+      else
+        nohup bash "$dir/setup.sh" >>"$log" 2>&1 </dev/null &
+      fi
+      echo $! >"$pidfile"
+      echo "started setup.sh pid $(cat "$pidfile")" >>"$log"
+      exit 0
+    args:
+      executable: /bin/bash
+    register: ocp4_workload_lab_setup_start
+    changed_when: false
+    failed_when: false
+    ignore_unreachable: true
+
+  rescue:
+  - name: Record that lab setup could not be started
+    ansible.builtin.debug:
+      msg: >-
+        Learner setup.sh was not started ({{ ansible_failed_result.msg | default('SSH or clone failed') }}).
+        Provision continues with the catalog-installed environment.

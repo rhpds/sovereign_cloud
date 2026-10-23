@@ -1,0 +1,7 @@
+---
+# The sandbox destroy removes the bastion. Do not SSH in or stop setup.sh.
+- name: Leave the learner setup script alone on destroy
+  ansible.builtin.debug:
+    msg: >-
+      Destroy does not stop setup.sh and does not remove ~/svc-lab.
+      The bastion goes away with the sandbox.
