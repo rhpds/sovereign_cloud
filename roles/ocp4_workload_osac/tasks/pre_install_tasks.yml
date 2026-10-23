@@ -115,4 +115,3 @@
       src: /tmp/aap-license.zip
       dest: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}//values/{{ ocp4_workload_osac_installer_profile }}/license.zip"
       mode: ug=rw,go=r
-
