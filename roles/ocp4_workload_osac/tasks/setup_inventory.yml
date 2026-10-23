@@ -57,8 +57,13 @@
     ansible_host: 10.10.10.2
     ansible_user: root
     ansible_ssh_private_key_file: /tmp/bmf_vm_id
+    # Password-based bastion (openshift-workloads vars) vs. key-based bastion from inventory (agnosticd ssh config)
     ansible_ssh_common_args: >-
       -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+      {% if bastion_ansible_ssh_pass is defined %}
       -o 'ProxyCommand=sshpass -p {{ bastion_ansible_ssh_pass }} ssh -W %h:%p
-      -p {{ bastion_ansible_port }} -o StrictHostKeyChecking=no
+      -p {{ bastion_ansible_port | default(22) }} -o StrictHostKeyChecking=no
       -o UserKnownHostsFile=/dev/null {{ bastion_ansible_user }}@{{ bastion_ansible_host }}'
+      {% else %}
+      -o 'ProxyCommand=ssh -F {{ hostvars.localhost.ansible_ssh_config }} -W %h:%p {{ _bastion_host }}'
+      {% endif %}
