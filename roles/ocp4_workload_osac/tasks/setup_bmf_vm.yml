@@ -1,0 +1,242 @@
+---
+- name: Set up BMF VM
+  delegate_to: bmf_vm
+  block:
+  - name: Install KVM and Sushy dependencies
+    ansible.builtin.dnf:
+      state: present
+      name:
+      - qemu-kvm
+      - libvirt
+      - virt-install
+      - python3-pip
+      - python3-devel
+      - gcc
+      - pkgconf-pkg-config
+      - python3-libvirt
+      - coreos-installer
+
+  - name: Enable libvirt sockets
+    ansible.builtin.systemd:
+      name: "{{ item }}"
+      enabled: true
+      state: started
+    loop:
+    - virtqemud.socket
+    - virtnetworkd.socket
+    - virtstoraged.socket
+
+  - name: Start virtqemud service so daemon is ready before sushy connects
+    ansible.builtin.systemd:
+      name: virtqemud.service
+      state: started
+      enabled: true
+
+  # Open mode: libvirt adds no firewall rules for the network, so it can't block hub -> guest
+  # traffic or rewrite replies. Forwarding and NAT are managed by osac-bmf-nft instead.
+  - name: Write libvirt default network definition (forward mode open)
+    ansible.builtin.copy:
+      dest: /etc/libvirt/osac-default-net.xml
+      mode: ug=rw,go=r
+      owner: root
+      group: root
+      content: |
+        <network>
+          <name>default</name>
+          <forward mode='open'/>
+          <bridge name='virbr0' stp='on' delay='0'/>
+          <ip address='192.168.122.1' netmask='255.255.255.0'>
+            <dhcp>
+              <range start='192.168.122.2' end='192.168.122.254'/>
+            </dhcp>
+          </ip>
+        </network>
+    register: _bmf_default_net
+
+  # Runs before any VM exists, so destroying the network disconnects nothing.
+  # Undefine first: net-define rejects a same-named network without its UUID.
+  - name: Read libvirt default network definition
+    ansible.builtin.command: virsh net-dumpxml --inactive default
+    register: _bmf_default_net_xml
+    changed_when: false
+    failed_when: false
+
+  - name: Redefine libvirt default network
+    when: _bmf_default_net is changed or "mode='open'" not in _bmf_default_net_xml.stdout
+    ansible.builtin.shell: >-
+      virsh net-destroy default || true;
+      virsh net-undefine default || true;
+      virsh net-define /etc/libvirt/osac-default-net.xml
+    changed_when: true
+
+  - name: Start default libvirt network (creates virbr0)
+    ansible.builtin.command: virsh net-start default
+    register: _virsh_net_start
+    failed_when:
+    - _virsh_net_start.rc != 0
+    - '"already active" not in _virsh_net_start.stderr'
+    changed_when: _virsh_net_start.rc == 0
+
+  - name: Set default libvirt network to autostart
+    ansible.builtin.command: virsh net-autostart default
+    register: _virsh_net_auto
+    changed_when: '"marked as autostarted" in _virsh_net_auto.stdout'
+
+  - name: Install sushy-tools into virtual environment
+    ansible.builtin.pip:
+      name:
+      - pip
+      - sushy-tools==2.1.0
+      virtualenv: /opt/sushy
+      virtualenv_command: python3 -m venv --system-site-packages
+      state: present
+
+  - name: Create sushy config directory
+    ansible.builtin.file:
+      path: /etc/sushy
+      state: directory
+      mode: ug=rwx,o=rx
+
+  - name: Write sushy configuration
+    ansible.builtin.copy:
+      dest: /etc/sushy/sushy-emulator.conf
+      mode: ug=rw,go=r
+      content: |
+        SUSHY_EMULATOR_LISTEN_IP = u'0.0.0.0'
+        SUSHY_EMULATOR_LISTEN_PORT = 8000
+        SUSHY_EMULATOR_LIBVIRT_URI = u'qemu:///system'
+
+  - name: Write sushy systemd unit
+    ansible.builtin.copy:
+      dest: /etc/systemd/system/sushy-emulator.service
+      mode: ug=rw,go=r
+      content: |
+        [Unit]
+        Description=Sushy Redfish emulator
+        After=network.target virtqemud.socket
+
+        [Service]
+        ExecStart=/opt/sushy/bin/sushy-emulator --config /etc/sushy/sushy-emulator.conf
+        Restart=on-failure
+
+        [Install]
+        WantedBy=multi-user.target
+
+  - name: Enable and start sushy-emulator
+    ansible.builtin.systemd:
+      name: sushy-emulator
+      enabled: true
+      state: started
+      daemon_reload: true
+
+  - name: Disable reverse path filtering for the asymmetric guest return path
+    ansible.builtin.copy:
+      dest: /etc/sysctl.d/99-osac-bmf.conf
+      mode: ug=rw,go=r
+      owner: root
+      group: root
+      content: |
+        net.ipv4.conf.all.rp_filter = 0
+        net.ipv4.conf.default.rp_filter = 0
+        net.ipv4.conf.enp2s0.rp_filter = 0
+        net.ipv4.conf.virbr0.rp_filter = 0
+        # libvirt does not enable forwarding for open-mode networks
+        net.ipv4.ip_forward = 1
+    register: _bmf_sysctl
+
+  # Not a handler: it must run now (later tasks need forwarding) and on bmf_vm (handlers don't inherit delegate_to)
+  - name: Apply rp_filter settings  # noqa: no-handler
+    when: _bmf_sysctl is changed
+    ansible.builtin.command: sysctl -p /etc/sysctl.d/99-osac-bmf.conf
+    changed_when: true
+
+  - name: Install OSAC BMF nftables script
+    ansible.builtin.copy:
+      src: osac-bmf-nft.sh
+      dest: /usr/local/sbin/osac-bmf-nft
+      mode: u=rwx,go=rx
+      owner: root
+      group: root
+
+  - name: Write OSAC BMF nftables service and timer
+    ansible.builtin.copy:
+      dest: "/etc/systemd/system/{{ item.name }}"
+      mode: ug=rw,go=r
+      content: "{{ item.content }}"
+      owner: root
+      group: root
+    loop:
+    - name: osac-bmf-nft.service
+      content: |
+        [Unit]
+        Description=OSAC BMF forwarding and NAT rules
+        Wants=network-online.target
+        After=network-online.target nftables.service
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/local/sbin/osac-bmf-nft
+
+        [Install]
+        WantedBy=multi-user.target
+    # ponytail: timer re-probes which hub node serves metal3 :6180, so the DNAT follows the pod
+    - name: osac-bmf-nft.timer
+      content: |
+        [Unit]
+        Description=Re-apply OSAC BMF nftables rules
+
+        [Timer]
+        OnBootSec=1min
+        OnUnitActiveSec=2min
+
+        [Install]
+        WantedBy=timers.target
+    loop_control:
+      label: "{{ item.name }}"
+
+  - name: Apply OSAC BMF nftables rules
+    ansible.builtin.systemd:
+      name: osac-bmf-nft.service
+      state: restarted
+      daemon_reload: true
+
+  - name: Verify hub -> guest :80/:443/:9999 forwarding is allowed
+    ansible.builtin.command: nft list chain inet filter forward
+    register: _bmf_forward
+    changed_when: false
+    failed_when: "'tcp dport { 80, 443, 9999 }' not in _bmf_forward.stdout"
+
+  - name: Enable OSAC BMF nftables service and timer at boot
+    ansible.builtin.systemd:
+      name: "{{ item }}"
+      enabled: true
+    loop:
+    - osac-bmf-nft.service
+    - osac-bmf-nft.timer
+
+  - name: Start OSAC BMF nftables timer
+    ansible.builtin.systemd:
+      name: osac-bmf-nft.timer
+      state: started
+
+  # The on-disk nftables config is an empty template: a reload would wipe the lab ruleset
+  - name: Read live nftables ruleset (without libvirt/firewalld tables)
+    ansible.builtin.shell: >-
+      set -o pipefail;
+      nft list tables | grep -Ev 'libvirt|firewalld' |
+      while read -r _ family name; do nft list table "$family" "$name"; done
+    register: _nft_live
+    changed_when: false
+
+  - name: Persist nftables ruleset to /etc/sysconfig/nftables.conf
+    ansible.builtin.copy:
+      dest: /etc/sysconfig/nftables.conf
+      mode: u=rw,go=
+      owner: root
+      group: root
+      content: "{{ _nft_live.stdout }}\n"
+
+  - name: Enable nftables service to load the persisted ruleset at boot
+    ansible.builtin.systemd:
+      name: nftables.service
+      enabled: true

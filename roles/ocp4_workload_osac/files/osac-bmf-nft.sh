@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Managed by Ansible (ocp4_workload_osac).
+# Re-applies the OSAC BMF forwarding/NAT rules in one atomic nft batch.
+# Rules owned here carry comment "osac" and are replaced on every run.
+# Run by osac-bmf-nft.service (boot + timer). The libvirt network uses forward mode open,
+# so libvirt adds no rules of its own.
+set -euo pipefail
+
+# Hub control-plane IPs; metal3-httpd (:6180) runs on whichever node hosts the metal3 pod
+METAL3_HOSTS="10.10.10.10 10.10.10.11 10.10.10.12"
+IRONIC_VIP=10.10.10.100
+
+batch=$(mktemp)
+trap 'rm -f "$batch"' EXIT
+
+# Create tables/chains only if missing so an existing chain's policy is left alone
+ensure_chain() {
+  local family=$1 table=$2 chain=$3 spec=$4
+  nft add table "$family" "$table"
+  nft list chain "$family" "$table" "$chain" >/dev/null 2>&1 ||
+    nft add chain "$family" "$table" "$chain" "{ $spec; }"
+}
+ensure_chain inet filter forward 'type filter hook forward priority filter'
+ensure_chain inet nat postrouting 'type nat hook postrouting priority srcnat'
+ensure_chain inet nat prerouting 'type nat hook prerouting priority dstnat'
+
+# Delete rules owned by previous runs (and any legacy :6180 DNAT)
+delete_owned() {
+  { nft -a list chain "$@" 2>/dev/null || true; } |
+    awk -v c="$*" '/comment "osac"/ || (c ~ /prerouting/ && /tcp dport 6180/) {print "delete rule " c " handle " $NF}'
+}
+
+{
+  delete_owned inet filter forward
+  delete_owned inet nat postrouting
+  delete_owned inet nat prerouting
+
+  cat <<'EOF'
+insert rule inet filter forward iifname "virbr0" oifname "enp2s0" accept comment "osac"
+insert rule inet filter forward iifname "enp2s0" oifname "virbr0" ct state established,related accept comment "osac"
+insert rule inet filter forward iifname "enp2s0" oifname "virbr0" ip daddr 192.168.122.0/24 tcp dport { 80, 443, 9999 } ct state new accept comment "osac"
+insert rule inet filter forward iifname "enp2s0" oifname "virbr0" icmp type echo-request accept comment "osac"
+insert rule inet filter forward iifname "virbr0" oifname "enp1s0" accept comment "osac"
+insert rule inet filter forward iifname "enp1s0" oifname "virbr0" ct state established,related accept comment "osac"
+add rule inet nat postrouting ip saddr 192.168.122.0/24 oifname "enp2s0" masquerade comment "osac"
+add rule inet nat postrouting ip saddr 192.168.122.0/24 oifname "enp1s0" masquerade comment "osac"
+EOF
+
+  for ip in $METAL3_HOSTS; do
+    if curl -s -o /dev/null -m 2 "http://$ip:6180/"; then
+      echo "add rule inet nat prerouting ip daddr $IRONIC_VIP tcp dport 6180 dnat to $ip comment \"osac\""
+      break
+    fi
+  done
+
+} > "$batch"
+
+nft -f "$batch" || { echo "nft batch failed:" >&2; cat "$batch" >&2; exit 1; }

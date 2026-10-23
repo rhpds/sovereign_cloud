@@ -1,6 +1,9 @@
 ---
-- name: Call setup_bastion_inventory.yml
-  ansible.builtin.include_tasks: setup_bastion_inventory.yml
+- name: Call setup_inventory.yml
+  ansible.builtin.include_tasks: setup_inventory.yml
+
+- name: Call setup_bmf_vm.yml
+  ansible.builtin.include_tasks: setup_bmf_vm.yml
 
 - name: Generate passwords if not provided
   ansible.builtin.include_tasks: setup_passwords.yml
@@ -20,6 +23,10 @@
 
 - name: Call post_install_fixes.yml
   ansible.builtin.include_tasks: post_install_fixes.yml
+
+- name: Call setup_caas.yml
+  when: ocp4_workload_osac_bmf_enabled | bool
+  ansible.builtin.include_tasks: setup_caas.yml
 
 - name: Call agd_user_info.yml
   ansible.builtin.include_tasks: agd_user_info.yml

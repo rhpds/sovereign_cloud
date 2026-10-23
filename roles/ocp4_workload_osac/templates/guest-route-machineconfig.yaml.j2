@@ -1,0 +1,28 @@
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  name: 99-{{ item }}-osac-guest-route
+  labels:
+    machineconfiguration.openshift.io/role: {{ item }}
+spec:
+  config:
+    ignition:
+      version: 3.4.0
+    systemd:
+      units:
+      - name: osac-guest-route.service
+        enabled: true
+        # shortcut: route is only re-added at boot or MC change; add an NM dispatcher if br-ex gets recreated at runtime
+        contents: |
+          [Unit]
+          Description=Route libvirt guest network via the OSAC BMF host
+          Wants=NetworkManager-wait-online.service
+          After=ovs-configuration.service NetworkManager-wait-online.service
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          ExecStart=/usr/sbin/ip route replace 192.168.122.0/24 via 10.10.10.2 dev br-ex
+
+          [Install]
+          WantedBy=multi-user.target

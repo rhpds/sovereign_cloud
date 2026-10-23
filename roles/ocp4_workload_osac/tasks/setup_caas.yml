@@ -1,0 +1,182 @@
+---
+# --------------------------------------------------------------
+# Metal3 must watch the osac namespace for the virtual BMHs
+# --------------------------------------------------------------
+- name: Enable watchAllNamespaces on Metal3 provisioning
+  kubernetes.core.k8s:
+    state: patched
+    api_version: metal3.io/v1alpha1
+    kind: Provisioning
+    name: provisioning-configuration
+    definition:
+      spec:
+        watchAllNamespaces: true
+
+- name: Wait for metal3-baremetal-operator rollout
+  kubernetes.core.k8s_info:
+    api_version: apps/v1
+    kind: Deployment
+    name: metal3-baremetal-operator
+    namespace: openshift-machine-api
+    wait: true
+    wait_condition:
+      type: Available
+      status: "True"
+    wait_timeout: 300
+
+# BMH create/label fails with "no endpoints available" until the webhook has an endpoint
+- name: Wait for baremetal-operator webhook endpoint
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Endpoints
+    name: baremetal-operator-webhook-service
+    namespace: openshift-machine-api
+  register: r_bmo_webhook_ep
+  until: >-
+    r_bmo_webhook_ep.resources | length > 0 and
+    r_bmo_webhook_ep.resources[0].subsets | default([]) | map(attribute='addresses', default=[]) | flatten | length > 0
+  retries: 30
+  delay: 10
+
+# ------------------------------------------------------------------
+# Hosted cluster settings for RHDP (no DNS provider, single replica)
+# ------------------------------------------------------------------
+- name: Read cluster base domain
+  kubernetes.core.k8s_info:
+    api_version: config.openshift.io/v1
+    kind: DNS
+    name: cluster
+  register: r_cluster_dns
+
+- name: Configure cluster-fulfillment-ig for RHDP
+  vars:
+    _hosted_domain: "hosted.{{ r_cluster_dns.resources[0].spec.baseDomain }}"
+  kubernetes.core.k8s:
+    state: patched
+    api_version: v1
+    kind: ConfigMap
+    name: cluster-fulfillment-ig
+    namespace: "{{ ocp4_workload_osac_namespace }}"
+    definition:
+      data:
+        DNS_CLASS: dns.noop.dns
+        EXTERNAL_ACCESS_BASE_DOMAIN: "{{ _hosted_domain }}"
+        HOSTED_CLUSTER_BASE_DOMAIN: "{{ _hosted_domain }}"
+        HOSTED_CLUSTER_CONTROLLER_AVAILABILITY_POLICY: SingleReplica
+        HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY: SingleReplica
+        NETWORK_STEPS_COLLECTION: ci.steps
+
+# --------------------------------------------------------------------
+# NetworkClass k8s-only is missing fabric_manager (chart default bug).
+# Must be set before tenants/VirtualNetworks are created.
+# --------------------------------------------------------------------
+- name: Find OSAC postgres pod
+  kubernetes.core.k8s_info:
+    api_version: v1
+    kind: Pod
+    namespace: osac-infra
+    field_selectors:
+    - status.phase=Running
+  register: r_osac_pg_pods
+
+- name: Set fabric_manager cudn_net on NetworkClass k8s-only
+  kubernetes.core.k8s_exec:
+    namespace: osac-infra
+    pod: "{{ (r_osac_pg_pods.resources | map(attribute='metadata.name') | select('match', '^postgres-') | first) }}"
+    container: server
+    command: >-
+      psql -U postgres osac_service -tAc
+      "UPDATE network_classes SET data = data || '{\"fabric_manager\": \"cudn_net\"}'::jsonb
+      WHERE name = 'k8s-only' RETURNING name"
+  register: r_networkclass_patch
+  until: "'k8s-only' in r_networkclass_patch.stdout | default('')"
+  retries: 30
+  delay: 10
+
+# cudn_net never writes the subnet fabric output ConfigMap; subnets are created at lab time
+- name: Create subnet fabric output ConfigMaps for cudn_net subnets
+  kubernetes.core.k8s:
+    state: present
+    template: subnet-fabric-output-cronjob.yaml.j2
+
+# ---------------------------------------------------------------------
+# Hub nodes route the libvirt guest network via the BMF host.
+# All nodes: metal3 (masters) reaches IPA :9999, routers (workers) reach guest :443.
+# A MachineConfig unit adds the route without touching br-ex's NM profile (an NNCP on
+# br-ex is unsupported and flaps it). The disruption policy avoids a reboot.
+# ---------------------------------------------------------------------
+- name: Apply guest route unit without node reboot or drain
+  kubernetes.core.k8s:
+    state: patched
+    api_version: operator.openshift.io/v1
+    kind: MachineConfiguration
+    name: cluster
+    definition:
+      spec:
+        nodeDisruptionPolicy:
+          units:
+          - name: osac-guest-route.service
+            actions:
+            - type: DaemonReload
+            - type: Restart
+              restart:
+                serviceName: osac-guest-route.service
+
+- name: Route libvirt guest network via BMF host on all nodes
+  kubernetes.core.k8s:
+    state: present
+    template: guest-route-machineconfig.yaml.j2
+  loop:
+  - master
+  - worker
+
+- name: Wait for MachineConfigPools to roll out the guest route
+  kubernetes.core.k8s_info:
+    api_version: machineconfiguration.openshift.io/v1
+    kind: MachineConfigPool
+    name: "{{ item }}"
+  register: r_mcp
+  until: >-
+    r_mcp.resources[0].status.configuration.source | default([]) | map(attribute='name')
+    | select('equalto', '99-' ~ item ~ '-osac-guest-route') | list | length > 0
+    and r_mcp.resources[0].status.updatedMachineCount | default(0) == r_mcp.resources[0].status.machineCount | default(-1)
+    and r_mcp.resources[0].status.conditions | default([]) | selectattr('type', 'equalto', 'Updated')
+    | selectattr('status', 'equalto', 'True') | list | length > 0
+  retries: 60
+  delay: 30
+  loop:
+  - master
+  - worker
+
+# --------------------------------------------------------------
+# CaaS workaround helper for Exercise 5 on the bastion
+# --------------------------------------------------------------
+- name: Copy caas-wa.sh to bastion
+  delegate_to: "{{ _bastion_host }}"
+  ansible.builtin.copy:
+    src: caas-wa.sh
+    dest: "~{{ ansible_user }}/rhdp-caas/"
+    mode: u=rwx,go=rx
+    owner: "{{ ansible_user }}"
+
+- name: Add CaaS lab shell helpers to bastion .bashrc
+  delegate_to: "{{ _bastion_host }}"
+  ansible.builtin.blockinfile:
+    path: "~{{ ansible_user }}/.bashrc"
+    marker: "# {mark} OSAC CaaS lab helpers"
+    block: |
+      guest_ssh() {
+        local ip=${GUEST_IP:-$(oc get bmh virtual-bmh-1 -n osac -o jsonpath='{.status.hardware.nics[0].ip}')}
+        ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes \
+          -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+          -o 'ProxyCommand=sudo ssh -W %h:%p root@10.10.10.2' "core@${ip}" "$@"
+      }
+
+      guest_oc() {
+        local order vip
+        order=${ORDER:-$(oc get clusterorder -n osac --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1:].metadata.name}')}
+        vip=$(oc get svc kube-apiserver -n "osac-${order}-${order}" -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+        [ -s "/tmp/${order}/kubeconfig" ] || \
+          oc extract "secret/${order}-admin-kubeconfig" -n "osac-${order}" --to="/tmp/${order}" --confirm >/dev/null
+        oc --kubeconfig="/tmp/${order}/kubeconfig" --server="https://${vip}:6443" --insecure-skip-tls-verify "$@"
+      }
