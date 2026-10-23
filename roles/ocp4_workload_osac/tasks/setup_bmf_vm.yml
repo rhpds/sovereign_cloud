@@ -144,7 +144,8 @@
         net.ipv4.ip_forward = 1
     register: _bmf_sysctl
 
-  - name: Apply rp_filter settings
+  # Not a handler: it must run now (later tasks need forwarding) and on bmf_vm (handlers don't inherit delegate_to)
+  - name: Apply rp_filter settings  # noqa: no-handler
     when: _bmf_sysctl is changed
     ansible.builtin.command: sysctl -p /etc/sysctl.d/99-osac-bmf.conf
     changed_when: true
