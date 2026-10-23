@@ -142,11 +142,6 @@
   - master
   - worker
 
-- name: Restart OSAC controllers periodically (token expiry workaround)
-  kubernetes.core.k8s:
-    state: present
-    template: token-restart-cronjob.yaml.j2
-
 # --------------------------------------------------------------
 # CaaS workaround helper for Exercise 5 on the bastion
 # --------------------------------------------------------------

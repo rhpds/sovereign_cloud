@@ -314,7 +314,7 @@
         STORAGE_TIERS: ""
   failed_when: false
 
-- name: Restart fulfillment controller, gRPC server, and OSAC UI
+- name: Restart fulfillment controller, gRPC server, OSAC UI, and OSAC operator
   kubernetes.core.k8s:
     state: patched
     api_version: apps/v1
@@ -331,3 +331,5 @@
   - fulfillment-controller
   - fulfillment-grpc-server
   - osac-ui
+  # Holds its CA pool in memory; must restart after the Keycloak route/ca-bundle changes above
+  - osac-operator
