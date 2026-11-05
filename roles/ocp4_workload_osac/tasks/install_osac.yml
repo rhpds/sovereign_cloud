@@ -58,6 +58,10 @@
           annotations:
             storageclass.kubernetes.io/is-default-class: "true"
 
+# The CI profiles point bmf.metal3.namespace at host-inventory, the namespace the
+# upstream E2E harness provisions. This lab keeps its virtual BMHs in the OSAC
+# namespace, and BMF only matches hosts in the namespace it is given -- otherwise
+# BareMetalInstances fail with "No matching hosts available".
 - name: "OSAC Phase 2: Install OSAC"
   delegate_to: "{{ _bastion_host }}"
   environment:
@@ -69,6 +73,7 @@
       PLATFORM=openshift
       PROFILE={{ ocp4_workload_osac_installer_profile }}
       NS={{ ocp4_workload_osac_namespace }}
+      EXTRA_HELM_ARGS="--set bmf.metal3.namespace={{ ocp4_workload_osac_namespace }}"
       2>&1 | tee -a ~{{ ansible_user }}/.osac_install.log
     chdir: "~{{ ansible_user }}/{{ ocp4_workload_osac_installer_directory }}"
   changed_when: true
