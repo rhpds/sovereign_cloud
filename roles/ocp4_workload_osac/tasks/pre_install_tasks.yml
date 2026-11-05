@@ -102,6 +102,7 @@
       path: "~{{ ansible_user }}/osac"
       state: absent
 
+  # git removes the destination on a failed clone, so a retry starts clean
   - name: Clone osac repository from GitHub
     ansible.builtin.git:
       repo: "{{ ocp4_workload_osac_repo }}"
@@ -109,6 +110,10 @@
       recursive: true
       version: "{{ ocp4_workload_osac_repo_version }}"
       depth: 1
+    retries: 3
+    delay: 10
+    register: r_osac_clone
+    until: r_osac_clone is success
 
   - name: Copy AAP license from Execution Environment to the Installer directory
     ansible.builtin.copy:
