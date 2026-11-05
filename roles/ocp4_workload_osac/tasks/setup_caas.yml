@@ -66,39 +66,6 @@
         HOSTED_CLUSTER_INFRASTRUCTURE_AVAILABILITY_POLICY: SingleReplica
         NETWORK_STEPS_COLLECTION: ci.steps
 
-# --------------------------------------------------------------------
-# NetworkClass k8s-only is missing fabric_manager (chart default bug).
-# Must be set before tenants/VirtualNetworks are created.
-# --------------------------------------------------------------------
-- name: Find OSAC postgres pod
-  kubernetes.core.k8s_info:
-    api_version: v1
-    kind: Pod
-    namespace: osac-infra
-    field_selectors:
-    - status.phase=Running
-  register: r_osac_pg_pods
-
-- name: Set fabric_manager cudn_net on NetworkClass k8s-only
-  kubernetes.core.k8s_exec:
-    namespace: osac-infra
-    pod: "{{ (r_osac_pg_pods.resources | map(attribute='metadata.name') | select('match', '^postgres-') | first) }}"
-    container: server
-    command: >-
-      psql -U postgres osac_service -tAc
-      "UPDATE network_classes SET data = data || '{\"fabric_manager\": \"cudn_net\"}'::jsonb
-      WHERE name = 'k8s-only' RETURNING name"
-  register: r_networkclass_patch
-  until: "'k8s-only' in r_networkclass_patch.stdout | default('')"
-  retries: 30
-  delay: 10
-
-# cudn_net never writes the subnet fabric output ConfigMap; subnets are created at lab time
-- name: Create subnet fabric output ConfigMaps for cudn_net subnets
-  kubernetes.core.k8s:
-    state: present
-    template: subnet-fabric-output-cronjob.yaml.j2
-
 # ---------------------------------------------------------------------
 # Hub nodes route the libvirt guest network via the BMF host.
 # All nodes: metal3 (masters) reaches IPA :9999, routers (workers) reach guest :443.
