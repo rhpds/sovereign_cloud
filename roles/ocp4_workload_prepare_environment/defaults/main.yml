@@ -66,6 +66,9 @@ ocp4_workload_prepare_environment_autoshift_dryrun: true
 # ------------------------------------------------
 # VirtualMachine for scanning
 # ------------------------------------------------
+# Set false to skip the VirtualMachine. Policies and the other resources in
+# this role are still created. Default true, so existing environments are unchanged.
+ocp4_workload_prepare_environment_vm_deploy: true
 ocp4_workload_prepare_environment_vm_name: rhel
 ocp4_workload_prepare_environment_vm_namespace: rhelvm
 ocp4_workload_prepare_environment_vm_datasource_name: rhel10

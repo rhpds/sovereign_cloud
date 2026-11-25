@@ -77,6 +77,7 @@
     template: applicationset_autoshift.yaml.j2
 
 - name: Create VM for scanning
+  when: ocp4_workload_prepare_environment_vm_deploy | bool
   kubernetes.core.k8s:
     state: present
     template: "{{ item }}"
@@ -85,6 +86,7 @@
   - vm.yaml.j2
 
 - name: Save VM user information
+  when: ocp4_workload_prepare_environment_vm_deploy | bool
   agnosticd.core.agnosticd_user_info:
     data:
       rhel_vm_name: "{{ ocp4_workload_prepare_environment_vm_name }}"
